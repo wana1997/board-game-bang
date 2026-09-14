@@ -3,6 +3,7 @@ import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { config } from "./config";
+import { registerRoomHandlers } from "./socketHandlers";
 
 const app = express();
 app.use(cors({ origin: config.clientOrigin }));
@@ -19,9 +20,7 @@ const io = new Server(httpServer, {
 io.on("connection", (socket) => {
   console.log(`[socket] connected: ${socket.id}`);
 
-  socket.on("ping", () => {
-    socket.emit("pong", { at: Date.now() });
-  });
+  registerRoomHandlers(io, socket);
 
   socket.on("disconnect", () => {
     console.log(`[socket] disconnected: ${socket.id}`);
