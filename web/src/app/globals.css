@@ -1,12 +1,38 @@
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #ecdbb4;
+  --foreground: #2c1c10;
+  --surface: #f7ecd2;
+  --surface-border: #b89a63;
+  --felt: #1f4d3a;
+  --felt-dark: #163a2b;
+  --wood: #4a2f1c;
+  --wood-dark: #2b1c12;
+  --gold: #a9791f;
+  --gold-bright: #d9a828;
+  --crimson: #8b1e1e;
+  --crimson-bright: #b8302f;
+  --steel: #395878;
+  --steel-bright: #4d7399;
+  --muted: #6b573c;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #221609;
+    --foreground: #f1e2bf;
+    --surface: #2f2013;
+    --surface-border: #5a4326;
+    --felt: #163a2b;
+    --felt-dark: #0e2820;
+    --wood: #3a2515;
+    --wood-dark: #1d130b;
+    --gold: #d9a828;
+    --gold-bright: #eec55a;
+    --crimson: #b8302f;
+    --crimson-bright: #d9463f;
+    --steel: #4d7399;
+    --steel-bright: #6a91bb;
+    --muted: #c7ac82;
   }
 }
 
@@ -26,7 +52,7 @@ body {
   flex-direction: column;
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), "Malgun Gothic", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

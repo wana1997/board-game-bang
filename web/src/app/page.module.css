@@ -5,57 +5,88 @@
   justify-content: center;
   padding: 24px;
   font-family: var(--font-geist-sans);
+  background: radial-gradient(ellipse at top, color-mix(in srgb, var(--gold) 12%, transparent), transparent 60%);
 }
 
 .main {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  align-items: center;
+  gap: 18px;
   width: 100%;
   max-width: 480px;
 }
 
-.main h1 {
-  font-size: 28px;
-  font-weight: 700;
+.title {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-shadow: 0 2px 0 color-mix(in srgb, var(--wood-dark) 40%, transparent);
+}
+
+.tagline {
+  margin-top: -12px;
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
 }
 
 .status {
-  font-size: 14px;
-  color: var(--foreground);
-  opacity: 0.7;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.statusOk {
+  font-weight: 700;
+  color: var(--felt);
+}
+
+.statusBad {
+  font-weight: 700;
+  color: var(--crimson);
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 700;
+  width: 100%;
 }
 
 .field input,
 .field select {
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-  background: transparent;
-  color: inherit;
+  border: 2px solid var(--surface-border);
+  background: var(--surface);
+  color: var(--foreground);
   font-size: 16px;
 }
 
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
 .error {
+  width: 100%;
   padding: 10px 12px;
   border-radius: 8px;
-  background: color-mix(in srgb, crimson 12%, transparent);
-  color: crimson;
+  background: color-mix(in srgb, var(--crimson) 15%, transparent);
+  color: var(--crimson-bright);
   font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }
 
 .panels {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .panel {
@@ -66,29 +97,33 @@
   gap: 14px;
   padding: 20px;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  background: var(--surface);
+  border: 2px solid var(--surface-border);
 }
 
 .panel h2 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--wood);
 }
 
 .panel button {
   margin-top: auto;
-  padding: 10px 16px;
+  padding: 11px 16px;
   border-radius: 8px;
   border: none;
-  background: var(--foreground);
-  color: var(--background);
-  font-size: 15px;
-  font-weight: 600;
+  background: linear-gradient(160deg, var(--gold-bright), var(--gold));
+  color: var(--wood-dark);
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--wood-dark) 60%, transparent);
 }
 
 .panel button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 @media (max-width: 480px) {

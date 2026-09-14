@@ -9,6 +9,7 @@ import {
   type Room,
   type RoomError,
 } from "./rooms";
+import { startGameForRoom } from "./gameHandlers";
 
 export type AckResponse =
   | { ok: true; room: Room }
@@ -63,6 +64,7 @@ export function registerRoomHandlers(io: Server, socket: Socket) {
 
       ack?.({ ok: true, room: result });
       broadcastRoom(io, result);
+      startGameForRoom(io, result.id);
     }
   );
 

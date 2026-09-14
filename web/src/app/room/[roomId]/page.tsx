@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSocket } from "@/lib/SocketProvider";
 import { useRoom, getSavedNickname } from "@/lib/RoomProvider";
 import { ROOM_ERROR_MESSAGES } from "@/lib/types";
+import GameBoard from "./GameBoard";
 import styles from "./page.module.css";
 
 export default function RoomPage() {
@@ -68,7 +69,7 @@ export default function RoomPage() {
     return (
       <div className={styles.page}>
         <main className={styles.main}>
-          <h1>방 {roomId} 참가</h1>
+          <h1 className={styles.title}>🤠 방 {roomId} 참가</h1>
           <form className={styles.joinForm} onSubmit={handleJoinSubmit}>
             <label className={styles.field}>
               닉네임
@@ -92,6 +93,10 @@ export default function RoomPage() {
     );
   }
 
+  if (room.status === "playing") {
+    return <GameBoard roomId={roomId} />;
+  }
+
   const self = room.players.find((p) => p.id === selfId);
   const isHost = self?.isHost ?? false;
   const isFull = room.players.length === room.capacity;
@@ -99,18 +104,19 @@ export default function RoomPage() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <h1>
-          방 코드 <span className={styles.code}>{room.id}</span>
+        <h1 className={styles.title}>
+          🤠 방 코드 <span className={styles.code}>{room.id}</span>
         </h1>
         <p className={styles.status}>
-          {room.players.length}/{room.capacity}명 참가 중
+          {room.players.length}/{room.capacity}명 모임
         </p>
 
         <ul className={styles.players}>
           {room.players.map((p) => (
             <li key={p.id} className={styles.player}>
-              <span>{p.nickname}</span>
-              {p.isHost && <span className={styles.hostBadge}>방장</span>}
+              <span className={styles.avatar}>{p.nickname.slice(0, 1)}</span>
+              <span className={styles.playerName}>{p.nickname}</span>
+              {p.isHost && <span className={styles.hostBadge}>★ 방장</span>}
               {p.id === selfId && <span className={styles.selfBadge}>나</span>}
             </li>
           ))}

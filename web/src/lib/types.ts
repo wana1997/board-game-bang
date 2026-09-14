@@ -27,8 +27,75 @@ export type AckResponse =
   | { ok: true; room: Room }
   | { ok: false; error: RoomError };
 
+// ---- 게임 (Phase 2: 뱅!/빗나감!/맥주만) ----
+
+export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
+export type CardName = "bang" | "missed" | "beer";
+
+export type Card = {
+  id: string;
+  name: CardName;
+  suit: Suit;
+  value: number;
+};
+
+export type Role = "sheriff" | "deputy" | "outlaw" | "renegade";
+export type Team = "sheriff" | "outlaw" | "renegade";
+export type TurnPhase = "play" | "discard";
+
+export type PendingBang = {
+  attackerId: string;
+  targetId: string;
+  respondBy: number;
+};
+
+export type PublicPlayerView = {
+  id: string;
+  nickname: string;
+  hp: number;
+  maxHp: number;
+  alive: boolean;
+  handCount: number;
+  role: Role | null;
+};
+
+export type GameView = {
+  roomId: string;
+  order: string[];
+  currentPlayerId: string;
+  turnPhase: TurnPhase;
+  bangPlayedThisTurn: boolean;
+  requiredDiscardCount: number;
+  deckCount: number;
+  players: PublicPlayerView[];
+  self: { id: string; role: Role; hand: Card[] };
+  pendingBang: PendingBang | null;
+  winner: Team | null;
+  log: string[];
+};
+
+export type GameActionError =
+  | "game_not_found"
+  | "game_over"
+  | "awaiting_response"
+  | "not_alive"
+  | "not_your_turn"
+  | "wrong_phase"
+  | "card_not_found"
+  | "bang_already_used"
+  | "invalid_target"
+  | "cannot_play_outside_response"
+  | "no_pending_bang"
+  | "not_your_response"
+  | "no_missed_card"
+  | "wrong_discard_count"
+  | "duplicate_card";
+
+export type GameActionResponse = { ok: true } | { ok: false; error: GameActionError };
+
 export interface ServerToClientEvents {
   "room:update": (room: Room) => void;
+  "game:update": (game: GameView) => void;
 }
 
 export interface ClientToServerEvents {
@@ -45,6 +112,22 @@ export interface ClientToServerEvents {
     ack: (res: AckResponse) => void
   ) => void;
   "room:leave": () => void;
+  "game:play_card": (
+    payload: { roomId: string; cardId: string; targetId?: string },
+    ack: (res: GameActionResponse) => void
+  ) => void;
+  "game:respond_bang": (
+    payload: { roomId: string; play: boolean },
+    ack: (res: GameActionResponse) => void
+  ) => void;
+  "game:discard_cards": (
+    payload: { roomId: string; cardIds: string[] },
+    ack: (res: GameActionResponse) => void
+  ) => void;
+  "game:end_turn": (
+    payload: { roomId: string },
+    ack: (res: GameActionResponse) => void
+  ) => void;
 }
 
 export const ROOM_ERROR_MESSAGES: Record<RoomError, string> = {
@@ -56,4 +139,76 @@ export const ROOM_ERROR_MESSAGES: Record<RoomError, string> = {
   nickname_taken: "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해주세요.",
   not_host: "방장만 게임을 시작할 수 있습니다.",
   not_full: "정원이 다 차야 게임을 시작할 수 있습니다.",
+};
+
+export const GAME_ERROR_MESSAGES: Record<GameActionError, string> = {
+  game_not_found: "게임을 찾을 수 없습니다.",
+  game_over: "이미 종료된 게임입니다.",
+  awaiting_response: "다른 플레이어의 응답을 기다리는 중입니다.",
+  not_alive: "탈락한 플레이어는 행동할 수 없습니다.",
+  not_your_turn: "내 턴이 아닙니다.",
+  wrong_phase: "지금은 할 수 없는 행동입니다.",
+  card_not_found: "손패에 없는 카드입니다.",
+  bang_already_used: "이번 턴에는 이미 뱅!을 사용했습니다.",
+  invalid_target: "대상을 다시 선택해주세요.",
+  cannot_play_outside_response: "지금은 낼 수 없는 카드입니다.",
+  no_pending_bang: "응답할 뱅!이 없습니다.",
+  not_your_response: "내가 응답할 차례가 아닙니다.",
+  no_missed_card: "빗나감! 카드가 없습니다.",
+  wrong_discard_count: "버려야 할 카드 수가 맞지 않습니다.",
+  duplicate_card: "같은 카드를 중복해서 선택했습니다.",
+};
+
+export const ROLE_LABEL: Record<Role, string> = {
+  sheriff: "보안관",
+  deputy: "부관",
+  outlaw: "무법자",
+  renegade: "배신자",
+};
+
+export const TEAM_LABEL: Record<Team, string> = {
+  sheriff: "보안관 진영",
+  outlaw: "무법자",
+  renegade: "배신자",
+};
+
+export const CARD_LABEL: Record<CardName, string> = {
+  bang: "뱅!",
+  missed: "빗나감!",
+  beer: "맥주",
+};
+
+export const CARD_ICON: Record<CardName, string> = {
+  bang: "🔫",
+  missed: "🛡️",
+  beer: "🍺",
+};
+
+export const SUIT_SYMBOL: Record<Suit, string> = {
+  spades: "♠",
+  hearts: "♥",
+  diamonds: "♦",
+  clubs: "♣",
+};
+
+export const SUIT_IS_RED: Record<Suit, boolean> = {
+  spades: false,
+  hearts: true,
+  diamonds: true,
+  clubs: false,
+};
+
+export function cardValueLabel(value: number): string {
+  if (value === 14) return "A";
+  if (value === 13) return "K";
+  if (value === 12) return "Q";
+  if (value === 11) return "J";
+  return String(value);
+}
+
+export const ROLE_ICON: Record<Role, string> = {
+  sheriff: "★",
+  deputy: "🛡",
+  outlaw: "💀",
+  renegade: "🃏",
 };

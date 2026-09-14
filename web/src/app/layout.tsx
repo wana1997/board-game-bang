@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SocketProvider } from "@/lib/SocketProvider";
 import { RoomProvider } from "@/lib/RoomProvider";
+import { GameProvider } from "@/lib/GameProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="ko" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body>
         <SocketProvider>
-          <RoomProvider>{children}</RoomProvider>
+          <RoomProvider>
+            <GameProvider>{children}</GameProvider>
+          </RoomProvider>
         </SocketProvider>
       </body>
     </html>

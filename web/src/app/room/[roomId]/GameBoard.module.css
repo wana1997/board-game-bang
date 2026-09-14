@@ -1,0 +1,475 @@
+.page {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  padding: 20px 14px 40px;
+  background:
+    radial-gradient(ellipse at top, color-mix(in srgb, var(--felt) 35%, transparent), transparent 60%),
+    var(--background);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 620px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 0;
+  font-size: 16px;
+  color: var(--muted);
+}
+
+/* ---- header / turn banner ---- */
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roomTag {
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--wood);
+  color: var(--surface);
+}
+
+.turnBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--gold-bright), var(--gold));
+  color: var(--wood-dark);
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--wood-dark) 60%, transparent);
+}
+
+.turnBannerLabel {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.turnBannerPhase {
+  font-size: 12px;
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+.waitingLine {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.title {
+  text-align: center;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.posterBadge {
+  align-self: center;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  padding: 4px 14px;
+  border: 2px solid var(--crimson);
+  color: var(--crimson);
+  border-radius: 4px;
+  transform: rotate(-3deg);
+}
+
+/* ---- seats (players) ---- */
+
+.seats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  list-style: none;
+}
+
+.seat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 2px solid var(--surface-border);
+}
+
+.seatActive {
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 35%, transparent);
+}
+
+.seatSelf {
+  background: color-mix(in srgb, var(--felt) 10%, var(--surface));
+}
+
+.seatDead {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+
+.avatar {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  background: var(--wood);
+  color: var(--surface);
+  border: 2px solid var(--gold);
+}
+
+.seatInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.seatName {
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seatStatus {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.youTag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--steel);
+  color: var(--surface);
+}
+
+.roleBadge {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--surface);
+  background: var(--muted);
+}
+
+.roleBadge[data-role="sheriff"] {
+  background: var(--gold);
+  color: var(--wood-dark);
+}
+
+.roleBadge[data-role="outlaw"] {
+  background: var(--crimson);
+}
+
+.roleBadge[data-role="renegade"] {
+  background: var(--steel);
+}
+
+.roleBadge[data-role="deputy"] {
+  background: var(--felt);
+}
+
+.hpPips {
+  display: flex;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.pipFull {
+  color: var(--crimson-bright);
+}
+
+.pipEmpty {
+  color: var(--surface-border);
+}
+
+.handCountTag {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---- overlays: bang response / target picker ---- */
+
+.bangOverlay {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+}
+
+.bangCard {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 3px solid var(--crimson);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--wood-dark) 45%, transparent);
+}
+
+.bangCardTitle {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--crimson);
+}
+
+.bangCardSub {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.bangCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.targetGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.targetButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 2px solid var(--surface-border);
+  background: var(--background);
+  color: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.targetButton:hover {
+  border-color: var(--crimson);
+}
+
+/* ---- self panel / hand ---- */
+
+.error {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--crimson) 15%, transparent);
+  color: var(--crimson-bright);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.selfPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--felt);
+  box-shadow: inset 0 0 0 6px var(--felt-dark);
+}
+
+.selfHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--surface);
+}
+
+.selfHeader strong {
+  color: var(--gold-bright);
+}
+
+.discardCounter {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: var(--wood-dark);
+}
+
+.hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 4px 0 2px;
+}
+
+.card {
+  position: relative;
+  width: 84px;
+  height: 112px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 10px;
+  border: none;
+  background: var(--surface);
+  color: var(--foreground);
+  cursor: pointer;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--wood-dark) 55%, transparent);
+  transition: transform 0.12s ease;
+}
+
+.card:not(:disabled):hover {
+  transform: translateY(-6px);
+}
+
+.card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.card_bang {
+  background: linear-gradient(160deg, #f6e2d8, #eec3b4);
+  border-top: 4px solid var(--crimson);
+}
+
+.card_missed {
+  background: linear-gradient(160deg, #dbe6f2, #b9cfe6);
+  border-top: 4px solid var(--steel);
+}
+
+.card_beer {
+  background: linear-gradient(160deg, #f7ecc8, #edd792);
+  border-top: 4px solid var(--gold);
+}
+
+.cardSelected {
+  transform: translateY(-10px);
+  outline: 3px solid var(--crimson-bright);
+}
+
+.cardIndex {
+  position: absolute;
+  top: 6px;
+  left: 7px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--wood-dark);
+}
+
+.cardIndexRed {
+  color: var(--crimson-bright);
+}
+
+.cardIcon {
+  font-size: 28px;
+}
+
+.cardLabel {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--wood-dark);
+}
+
+.actionBar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- buttons ---- */
+
+.woodButton {
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(160deg, var(--gold-bright), var(--gold));
+  color: var(--wood-dark);
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--wood-dark) 60%, transparent);
+}
+
+.woodButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.woodButtonGhost {
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 2px solid var(--surface-border);
+  background: transparent;
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.woodButtonGhost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---- log ---- */
+
+.logBox {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--wood) 12%, var(--surface));
+  border: 1px solid var(--surface-border);
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.log li::before {
+  content: "» ";
+  color: var(--gold);
+  font-weight: 700;
+}

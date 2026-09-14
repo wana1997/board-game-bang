@@ -43,12 +43,10 @@ export default function Home() {
   return (
     <div className={styles.page}>
       <main className={styles.main}>
-        <h1>프로젝트 뱅!</h1>
+        <h1 className={styles.title}>🤠 프로젝트 뱅!</h1>
+        <p className={styles.tagline}>서부의 무법자들이 모이는 곳</p>
         <p className={styles.status}>
-          서버:{" "}
-          <strong style={{ color: connected ? "seagreen" : "crimson" }}>
-            {connected ? "연결됨" : "연결 중..."}
-          </strong>
+          서버 <span className={connected ? styles.statusOk : styles.statusBad}>{connected ? "연결됨" : "연결 중..."}</span>
         </p>
 
         <label className={styles.field}>
