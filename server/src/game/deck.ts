@@ -11,12 +11,25 @@ function makeCards(name: CardName, count: number, idPrefix: string): Card[] {
   }));
 }
 
-/** Phase 2 MVP 덱: 뱅!/빗나감!/맥주만 포함 (CARDS.MD 갈색 카드 수량 기준). */
+/**
+ * Phase 3 MVP 덱: CARDS.MD 갈색 카드 중 뱅!/빗나감!/맥주, 파란 카드 17장 전체(무기 5종/술통/야생마/조준경/감옥/다이너마이트).
+ * 강탈/캣벌루/결투/인디언/기관총/웰스파고/스테이지코치/제너럴스토어/살룬은 Phase 4, 6에서 추가.
+ */
 export function buildDeck(): Card[] {
   return [
     ...makeCards("bang", 25, "bang"),
     ...makeCards("missed", 12, "missed"),
     ...makeCards("beer", 6, "beer"),
+    ...makeCards("schofield", 3, "schofield"),
+    ...makeCards("volcanic", 2, "volcanic"),
+    ...makeCards("remington", 1, "remington"),
+    ...makeCards("carabine", 1, "carabine"),
+    ...makeCards("winchester", 1, "winchester"),
+    ...makeCards("barrel", 2, "barrel"),
+    ...makeCards("mustang", 2, "mustang"),
+    ...makeCards("scope", 1, "scope"),
+    ...makeCards("jail", 3, "jail"),
+    ...makeCards("dynamite", 1, "dynamite"),
   ];
 }
 

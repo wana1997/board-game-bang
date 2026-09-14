@@ -217,6 +217,17 @@
   color: var(--muted);
 }
 
+.equipRow {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.equipBadge {
+  font-size: 14px;
+  line-height: 1;
+}
+
 /* ---- overlays: bang response / target picker ---- */
 
 .bangOverlay {
@@ -284,6 +295,18 @@
   border-color: var(--crimson);
 }
 
+.targetButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--surface-border);
+}
+
+.targetDistance {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
 /* ---- self panel / hand ---- */
 
 .error {
@@ -339,7 +362,7 @@
 .card {
   position: relative;
   width: 84px;
-  height: 112px;
+  height: 122px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -378,6 +401,11 @@
   border-top: 4px solid var(--gold);
 }
 
+.card_blue {
+  background: linear-gradient(160deg, #dde8dc, #b9cbb0);
+  border-top: 4px solid var(--felt);
+}
+
 .cardSelected {
   transform: translateY(-10px);
   outline: 3px solid var(--crimson-bright);
@@ -404,6 +432,13 @@
   font-size: 12px;
   font-weight: 800;
   color: var(--wood-dark);
+}
+
+.cardSub {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--wood-dark);
+  opacity: 0.75;
 }
 
 .actionBar {

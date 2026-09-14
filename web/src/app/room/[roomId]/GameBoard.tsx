@@ -13,18 +13,24 @@ import {
   SUIT_IS_RED,
   SUIT_SYMBOL,
   TEAM_LABEL,
+  WEAPON_CARDS,
   cardValueLabel,
+  effectiveDistance,
+  weaponRangeOf,
   type Card,
   type GameActionResponse,
+  type PublicEquipmentView,
 } from "@/lib/types";
 import styles from "./GameBoard.module.css";
+
+const SELF_EQUIP_CARDS = new Set(["beer", "barrel", "mustang", "scope", "dynamite"]);
 
 export default function GameBoard({ roomId }: { roomId: string }) {
   const router = useRouter();
   const { leaveRoom } = useRoom();
   const { game, playCard, respondBang, discardCards, endTurn } = useGame();
 
-  const [targetingCardId, setTargetingCardId] = useState<string | null>(null);
+  const [targetingCard, setTargetingCard] = useState<Card | null>(null);
   const [selectedDiscards, setSelectedDiscards] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -37,6 +43,10 @@ export default function GameBoard({ roomId }: { roomId: string }) {
     () => game?.self.hand.some((c) => c.name === "missed") ?? false,
     [game]
   );
+  const myWeaponRange = useMemo(() => {
+    const me = game?.players.find((p) => p.id === selfId);
+    return weaponRangeOf(me?.equipment.weapon ?? null);
+  }, [game, selfId]);
 
   if (!game) {
     return (
@@ -60,19 +70,19 @@ export default function GameBoard({ roomId }: { roomId: string }) {
 
   function handleCardClick(card: Card) {
     if (!isMyTurn || game!.turnPhase !== "play" || game!.pendingBang || pending) return;
-    if (card.name === "bang") {
-      setTargetingCardId(card.id);
+    if (card.name === "bang" || card.name === "jail") {
+      setTargetingCard(card);
       return;
     }
-    if (card.name === "beer") {
+    if (SELF_EQUIP_CARDS.has(card.name) || WEAPON_CARDS.has(card.name)) {
       handleAction(playCard(roomId, card.id));
     }
   }
 
   function handlePickTarget(targetId: string) {
-    if (!targetingCardId) return;
-    const cardId = targetingCardId;
-    setTargetingCardId(null);
+    if (!targetingCard) return;
+    const cardId = targetingCard.id;
+    setTargetingCard(null);
     handleAction(playCard(roomId, cardId, targetId));
   }
 
@@ -125,6 +135,11 @@ export default function GameBoard({ roomId }: { roomId: string }) {
   const currentPlayerNickname =
     game.players.find((p) => p.id === game.currentPlayerId)?.nickname ?? "";
 
+  const targetCandidates =
+    targetingCard?.name === "jail"
+      ? game.players.filter((p) => p.id !== selfId && p.alive && p.role !== "sheriff")
+      : game.players.filter((p) => p.id !== selfId && p.alive);
+
   return (
     <div className={styles.page}>
       <main className={styles.main}>
@@ -166,6 +181,7 @@ export default function GameBoard({ roomId }: { roomId: string }) {
                 )}
                 <HpPips hp={p.hp} maxHp={p.maxHp} />
                 <span className={styles.handCountTag}>🂠 {p.handCount}</span>
+                <EquipmentBadges equipment={p.equipment} />
               </div>
             </li>
           ))}
@@ -196,25 +212,46 @@ export default function GameBoard({ roomId }: { roomId: string }) {
           </div>
         )}
 
-        {targetingCardId && (
+        {targetingCard && (
           <div className={styles.bangOverlay}>
             <div className={styles.bangCard}>
-              <p className={styles.bangCardTitle}>🎯 대상을 조준하세요</p>
+              <p className={styles.bangCardTitle}>
+                {targetingCard.name === "jail" ? "⛓️ 누구를 가둘까요?" : "🎯 대상을 조준하세요"}
+              </p>
+              {targetingCard.name === "bang" && (
+                <p className={styles.bangCardSub}>내 사거리: {myWeaponRange}</p>
+              )}
               <div className={styles.targetGrid}>
-                {game.players
-                  .filter((p) => p.id !== selfId && p.alive)
-                  .map((p) => (
+                {targetCandidates.map((p) => {
+                  if (targetingCard.name !== "bang") {
+                    return (
+                      <button
+                        key={p.id}
+                        className={styles.targetButton}
+                        onClick={() => handlePickTarget(p.id)}
+                      >
+                        <span className={styles.avatar}>{p.nickname.slice(0, 1)}</span>
+                        {p.nickname}
+                      </button>
+                    );
+                  }
+                  const dist = effectiveDistance(game.order, game.players, selfId!, p.id);
+                  const inRange = dist <= myWeaponRange;
+                  return (
                     <button
                       key={p.id}
                       className={styles.targetButton}
+                      disabled={!inRange}
                       onClick={() => handlePickTarget(p.id)}
                     >
                       <span className={styles.avatar}>{p.nickname.slice(0, 1)}</span>
                       {p.nickname}
+                      <span className={styles.targetDistance}>거리 {dist}</span>
                     </button>
-                  ))}
+                  );
+                })}
               </div>
-              <button className={styles.woodButtonGhost} onClick={() => setTargetingCardId(null)}>
+              <button className={styles.woodButtonGhost} onClick={() => setTargetingCard(null)}>
                 취소
               </button>
             </div>
@@ -238,12 +275,11 @@ export default function GameBoard({ roomId }: { roomId: string }) {
           <div className={styles.hand}>
             {game.self.hand.map((card) => {
               const selected = selectedDiscards.includes(card.id);
+              const playable = card.name === "bang" || card.name === "jail" ||
+                SELF_EQUIP_CARDS.has(card.name) || WEAPON_CARDS.has(card.name);
               const disabled =
                 !isDiscardTurn &&
-                (card.name === "missed" ||
-                  !isMyTurn ||
-                  game.turnPhase !== "play" ||
-                  !!game.pendingBang);
+                (!playable || !isMyTurn || game.turnPhase !== "play" || !!game.pendingBang);
               return (
                 <PlayingCard
                   key={card.id}
@@ -309,6 +345,34 @@ function HpPips({ hp, maxHp }: { hp: number; maxHp: number }) {
   );
 }
 
+function EquipmentBadges({ equipment }: { equipment: PublicEquipmentView }) {
+  const badges: { key: string; icon: string; label: string }[] = [];
+  if (equipment.weapon) {
+    badges.push({
+      key: "weapon",
+      icon: CARD_ICON[equipment.weapon],
+      label: `${CARD_LABEL[equipment.weapon]} (사거리 ${weaponRangeOf(equipment.weapon)})`,
+    });
+  }
+  if (equipment.scope) badges.push({ key: "scope", icon: CARD_ICON.scope, label: "조준경" });
+  if (equipment.mustang) badges.push({ key: "mustang", icon: CARD_ICON.mustang, label: "야생마" });
+  if (equipment.barrel) badges.push({ key: "barrel", icon: CARD_ICON.barrel, label: "술통" });
+  if (equipment.jail) badges.push({ key: "jail", icon: CARD_ICON.jail, label: "감옥" });
+  if (equipment.dynamite) badges.push({ key: "dynamite", icon: CARD_ICON.dynamite, label: "다이너마이트" });
+
+  if (badges.length === 0) return null;
+
+  return (
+    <span className={styles.equipRow}>
+      {badges.map((b) => (
+        <span key={b.key} className={styles.equipBadge} title={b.label}>
+          {b.icon}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function PlayingCard({
   card,
   selected,
@@ -321,9 +385,11 @@ function PlayingCard({
   onClick: () => void;
 }) {
   const red = SUIT_IS_RED[card.suit];
+  const range = weaponRangeOf(card.name);
+  const isWeapon = WEAPON_CARDS.has(card.name);
   return (
     <button
-      className={`${styles.card} ${styles[`card_${card.name}`]} ${selected ? styles.cardSelected : ""}`}
+      className={`${styles.card} ${styles[`card_${card.name}`] ?? styles.card_blue} ${selected ? styles.cardSelected : ""}`}
       onClick={onClick}
       disabled={disabled}
     >
@@ -333,6 +399,7 @@ function PlayingCard({
       </span>
       <span className={styles.cardIcon}>{CARD_ICON[card.name]}</span>
       <span className={styles.cardLabel}>{CARD_LABEL[card.name]}</span>
+      {isWeapon && <span className={styles.cardSub}>사거리 {range}</span>}
     </button>
   );
 }

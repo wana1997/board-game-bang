@@ -27,10 +27,24 @@ export type AckResponse =
   | { ok: true; room: Room }
   | { ok: false; error: RoomError };
 
-// ---- 게임 (Phase 2: 뱅!/빗나감!/맥주만) ----
+// ---- 게임 (Phase 3: 뱅!/빗나감!/맥주 + 거리 시스템/장착 카드) ----
 
 export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
-export type CardName = "bang" | "missed" | "beer";
+
+export type CardName =
+  | "bang"
+  | "missed"
+  | "beer"
+  | "schofield"
+  | "volcanic"
+  | "remington"
+  | "carabine"
+  | "winchester"
+  | "barrel"
+  | "mustang"
+  | "scope"
+  | "jail"
+  | "dynamite";
 
 export type Card = {
   id: string;
@@ -49,6 +63,15 @@ export type PendingBang = {
   respondBy: number;
 };
 
+export type PublicEquipmentView = {
+  weapon: CardName | null;
+  scope: boolean;
+  mustang: boolean;
+  barrel: boolean;
+  jail: boolean;
+  dynamite: boolean;
+};
+
 export type PublicPlayerView = {
   id: string;
   nickname: string;
@@ -57,6 +80,7 @@ export type PublicPlayerView = {
   alive: boolean;
   handCount: number;
   role: Role | null;
+  equipment: PublicEquipmentView;
 };
 
 export type GameView = {
@@ -84,6 +108,9 @@ export type GameActionError =
   | "card_not_found"
   | "bang_already_used"
   | "invalid_target"
+  | "out_of_range"
+  | "already_equipped"
+  | "cannot_jail_sheriff"
   | "cannot_play_outside_response"
   | "no_pending_bang"
   | "not_your_response"
@@ -151,6 +178,9 @@ export const GAME_ERROR_MESSAGES: Record<GameActionError, string> = {
   card_not_found: "손패에 없는 카드입니다.",
   bang_already_used: "이번 턴에는 이미 뱅!을 사용했습니다.",
   invalid_target: "대상을 다시 선택해주세요.",
+  out_of_range: "사거리 밖에 있는 대상입니다.",
+  already_equipped: "이미 장착되어 있어 낼 수 없습니다.",
+  cannot_jail_sheriff: "보안관에게는 감옥을 사용할 수 없습니다.",
   cannot_play_outside_response: "지금은 낼 수 없는 카드입니다.",
   no_pending_bang: "응답할 뱅!이 없습니다.",
   not_your_response: "내가 응답할 차례가 아닙니다.",
@@ -176,13 +206,54 @@ export const CARD_LABEL: Record<CardName, string> = {
   bang: "뱅!",
   missed: "빗나감!",
   beer: "맥주",
+  schofield: "스콜필드",
+  volcanic: "볼칸",
+  remington: "레밍턴",
+  carabine: "카라빈",
+  winchester: "윈체스터",
+  barrel: "술통",
+  mustang: "야생마",
+  scope: "조준경",
+  jail: "감옥",
+  dynamite: "다이너마이트",
 };
 
 export const CARD_ICON: Record<CardName, string> = {
   bang: "🔫",
   missed: "🛡️",
   beer: "🍺",
+  schofield: "🔫",
+  volcanic: "🔫",
+  remington: "🔫",
+  carabine: "🔫",
+  winchester: "🔫",
+  barrel: "🛢️",
+  mustang: "🐎",
+  scope: "🔭",
+  jail: "⛓️",
+  dynamite: "🧨",
 };
+
+export const WEAPON_CARDS = new Set<CardName>([
+  "schofield",
+  "volcanic",
+  "remington",
+  "carabine",
+  "winchester",
+]);
+
+export const WEAPON_RANGE: Partial<Record<CardName, number>> = {
+  schofield: 2,
+  volcanic: 1,
+  remington: 3,
+  carabine: 4,
+  winchester: 5,
+};
+
+export function weaponRangeOf(weapon: CardName | null): number {
+  if (!weapon) return 1;
+  return WEAPON_RANGE[weapon] ?? 1;
+}
 
 export const SUIT_SYMBOL: Record<Suit, string> = {
   spades: "♠",
@@ -212,3 +283,28 @@ export const ROLE_ICON: Record<Role, string> = {
   outlaw: "💀",
   renegade: "🃏",
 };
+
+/** 생존자만 놓고 원탁에서 몇 칸 떨어져 있는지 (양옆 = 1). 서버 game/distance.ts와 동일 로직. */
+export function seatDistance(order: string[], players: PublicPlayerView[], aId: string, bId: string): number {
+  const aliveIds = order.filter((id) => players.find((p) => p.id === id)?.alive);
+  const ai = aliveIds.indexOf(aId);
+  const bi = aliveIds.indexOf(bId);
+  if (ai === -1 || bi === -1) return Infinity;
+  const n = aliveIds.length;
+  const diff = Math.abs(ai - bi);
+  return Math.min(diff, n - diff);
+}
+
+export function effectiveDistance(
+  order: string[],
+  players: PublicPlayerView[],
+  fromId: string,
+  toId: string
+): number {
+  const base = seatDistance(order, players, fromId, toId);
+  const attacker = players.find((p) => p.id === fromId);
+  const target = players.find((p) => p.id === toId);
+  const scopeBonus = attacker?.equipment.scope ? 1 : 0;
+  const mustangBonus = target?.equipment.mustang ? 1 : 0;
+  return Math.max(1, base - scopeBonus + mustangBonus);
+}

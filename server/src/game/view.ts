@@ -1,4 +1,13 @@
-import type { Card, GameState, PendingBang, Role, TurnPhase, Team } from "./types";
+import type { Card, CardName, Equipment, GameState, PendingBang, Role, TurnPhase, Team } from "./types";
+
+export type PublicEquipmentView = {
+  weapon: CardName | null;
+  scope: boolean;
+  mustang: boolean;
+  barrel: boolean;
+  jail: boolean;
+  dynamite: boolean;
+};
 
 export type PublicPlayerView = {
   id: string;
@@ -8,6 +17,7 @@ export type PublicPlayerView = {
   alive: boolean;
   handCount: number;
   role: Role | null; // null = 아직 공개되지 않은 역할
+  equipment: PublicEquipmentView;
 };
 
 export type GameView = {
@@ -25,6 +35,17 @@ export type GameView = {
   log: string[];
 };
 
+function publicEquipment(equipment: Equipment): PublicEquipmentView {
+  return {
+    weapon: equipment.weapon?.name ?? null,
+    scope: !!equipment.scope,
+    mustang: !!equipment.mustang,
+    barrel: !!equipment.barrel,
+    jail: !!equipment.jail,
+    dynamite: !!equipment.dynamite,
+  };
+}
+
 /** 보안관 역할은 항상 공개, 그 외는 사망하거나 게임이 끝나야 공개됨(자기 자신은 항상 확인 가능). */
 export function buildGameView(state: GameState, viewerId: string): GameView {
   const self = state.players[viewerId];
@@ -40,6 +61,7 @@ export function buildGameView(state: GameState, viewerId: string): GameView {
       alive: p.alive,
       handCount: p.hand.length,
       role: roleVisible ? p.role : null,
+      equipment: publicEquipment(p.equipment),
     };
   });
 

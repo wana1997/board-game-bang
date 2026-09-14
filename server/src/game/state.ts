@@ -1,4 +1,14 @@
-import type { Card, GameState, PlayerState, Role, Team } from "./types";
+import {
+  cardCheckLabel,
+  createEquipment,
+  ROLE_LABEL,
+  TEAM_LABEL,
+  type Card,
+  type GameState,
+  type PlayerState,
+  type Role,
+  type Team,
+} from "./types";
 import { buildDeck, shuffle } from "./deck";
 import { assignRoles, buildTurnOrder } from "./roles";
 import type { Room } from "../rooms";
@@ -28,6 +38,7 @@ export function createGame(room: Room): GameState {
       hp: maxHp,
       maxHp,
       hand: deck.splice(0, maxHp),
+      equipment: createEquipment(),
       alive: true,
     };
   }
@@ -47,9 +58,8 @@ export function createGame(room: Room): GameState {
     log: [],
   };
 
-  const first = players[order[0]];
-  first.hand.push(...drawCards(state, 2));
-  state.log.push(`게임이 시작되었습니다. 선 플레이어: ${first.nickname}`);
+  state.log.push(`게임이 시작되었습니다. 선 플레이어: ${players[order[0]].nickname}`);
+  beginTurn(state);
 
   return state;
 }
@@ -94,21 +104,133 @@ export function checkWinner(state: GameState): Team | null {
   return null;
 }
 
-export function advanceTurn(state: GameState) {
+export function nextAlivePlayerId(state: GameState, fromId: string): string | null {
   const n = state.order.length;
+  const fromIdx = state.order.indexOf(fromId);
   for (let i = 1; i <= n; i++) {
-    const idx = (state.currentPlayerIndex + i) % n;
-    if (state.players[state.order[idx]].alive) {
-      state.currentPlayerIndex = idx;
-      break;
+    const idx = (fromIdx + i) % n;
+    const candidate = state.players[state.order[idx]];
+    if (candidate.alive) return candidate.id;
+  }
+  return null;
+}
+
+/** 사망 처리: 손패/장착 카드 버림, 처치 보상/페널티, 승리 판정까지 한 번에 처리. */
+export function killPlayer(state: GameState, victim: PlayerState, killerId: string | null) {
+  victim.alive = false;
+  state.discard.push(...victim.hand);
+  victim.hand = [];
+
+  const eq = victim.equipment;
+  for (const key of ["weapon", "scope", "mustang", "barrel", "jail", "dynamite"] as const) {
+    const card = eq[key];
+    if (card) {
+      state.discard.push(card);
+      eq[key] = null;
     }
   }
 
+  state.log.push(`${victim.nickname}가 쓰러졌습니다. (역할: ${ROLE_LABEL[victim.role]})`);
+
+  if (killerId && killerId !== victim.id) {
+    const killer = state.players[killerId];
+    if (killer?.alive) {
+      if (victim.role === "outlaw") {
+        killer.hand.push(...drawCards(state, 3));
+        state.log.push(`${killer.nickname}가 무법자를 처치하여 카드 3장을 뽑았습니다.`);
+      }
+      if (killer.role === "sheriff" && victim.role === "deputy") {
+        state.discard.push(...killer.hand);
+        killer.hand = [];
+        state.log.push(`${killer.nickname}가 부관을 죽여 손패를 모두 버렸습니다.`);
+      }
+    }
+  }
+
+  const winner = checkWinner(state);
+  if (winner) {
+    state.winner = winner;
+    state.log.push(`게임 종료! 승리 진영: ${TEAM_LABEL[winner]}`);
+  }
+}
+
+/**
+ * 현재 플레이어의 턴을 시작. 다이너마이트 체크 → (생존 시) 감옥 체크 → 드로우 순서.
+ * 감옥에 걸리면 이번 턴을 통째로 건너뛰고 advanceTurn을 재귀 호출한다.
+ */
+function beginTurn(state: GameState) {
+  const player = currentPlayer(state);
   state.turnPhase = "play";
   state.bangPlayedThisTurn = false;
   state.requiredDiscardCount = 0;
 
-  const player = currentPlayer(state);
+  if (player.equipment.dynamite) {
+    const [check] = drawCards(state, 1);
+    const dynamiteCard = player.equipment.dynamite;
+    player.equipment.dynamite = null;
+
+    if (check) {
+      state.discard.push(check);
+      state.log.push(`${player.nickname}의 다이너마이트 체크: ${cardCheckLabel(check)}`);
+
+      const exploded = check.suit === "spades" && check.value >= 2 && check.value <= 9;
+      if (exploded) {
+        state.discard.push(dynamiteCard);
+        state.log.push(`다이너마이트가 폭발했습니다! ${player.nickname} 체력 3 감소`);
+        player.hp -= 3;
+        if (player.hp <= 0) {
+          killPlayer(state, player, null);
+        }
+      } else {
+        const nextId = nextAlivePlayerId(state, player.id);
+        if (nextId) {
+          state.players[nextId].equipment.dynamite = dynamiteCard;
+          state.log.push(`다이너마이트가 ${state.players[nextId].nickname}에게 넘어갔습니다.`);
+        } else {
+          state.discard.push(dynamiteCard);
+        }
+      }
+    } else {
+      state.discard.push(dynamiteCard);
+    }
+  }
+
+  if (state.winner) return;
+
+  if (!player.alive) {
+    advanceTurn(state);
+    return;
+  }
+
+  if (player.equipment.jail) {
+    const [check] = drawCards(state, 1);
+    const jailCard = player.equipment.jail;
+    player.equipment.jail = null;
+
+    if (check) {
+      state.discard.push(check);
+      state.discard.push(jailCard);
+      state.log.push(`${player.nickname}의 감옥 체크: ${cardCheckLabel(check)}`);
+
+      if (check.suit === "hearts") {
+        state.log.push(`${player.nickname}가 감옥에서 탈출했습니다.`);
+      } else {
+        state.log.push(`${player.nickname}는 이번 턴을 감옥에서 보냅니다.`);
+        advanceTurn(state);
+        return;
+      }
+    } else {
+      state.discard.push(jailCard);
+    }
+  }
+
   player.hand.push(...drawCards(state, 2));
   state.log.push(`${player.nickname}의 턴입니다. (카드 2장 드로우)`);
+}
+
+export function advanceTurn(state: GameState) {
+  const nextId = nextAlivePlayerId(state, currentPlayer(state).id);
+  if (!nextId) return;
+  state.currentPlayerIndex = state.order.indexOf(nextId);
+  beginTurn(state);
 }

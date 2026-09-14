@@ -1,42 +1,14 @@
 import { config } from "../config";
-import { advanceTurn, checkWinner, currentPlayer, drawCards } from "./state";
+import { canShoot, WEAPON_NAMES } from "./distance";
+import { advanceTurn, currentPlayer, drawCards, killPlayer } from "./state";
 import {
+  cardCheckLabel,
+  CARD_LABEL,
   err,
   ok,
-  ROLE_LABEL,
-  TEAM_LABEL,
   type ActionResult,
   type GameState,
-  type PlayerState,
 } from "./types";
-
-function killPlayer(state: GameState, victim: PlayerState, killerId: string | null) {
-  victim.alive = false;
-  state.discard.push(...victim.hand);
-  victim.hand = [];
-  state.log.push(`${victim.nickname}가 쓰러졌습니다. (역할: ${ROLE_LABEL[victim.role]})`);
-
-  if (killerId && killerId !== victim.id) {
-    const killer = state.players[killerId];
-    if (killer?.alive) {
-      if (victim.role === "outlaw") {
-        killer.hand.push(...drawCards(state, 3));
-        state.log.push(`${killer.nickname}가 무법자를 처치하여 카드 3장을 뽑았습니다.`);
-      }
-      if (killer.role === "sheriff" && victim.role === "deputy") {
-        state.discard.push(...killer.hand);
-        killer.hand = [];
-        state.log.push(`${killer.nickname}가 부관을 죽여 손패를 모두 버렸습니다.`);
-      }
-    }
-  }
-
-  const winner = checkWinner(state);
-  if (winner) {
-    state.winner = winner;
-    state.log.push(`게임 종료! 승리 진영: ${TEAM_LABEL[winner]}`);
-  }
-}
 
 export function playCard(
   state: GameState,
@@ -57,14 +29,29 @@ export function playCard(
   const card = player.hand[cardIndex];
 
   if (card.name === "bang") {
-    if (state.bangPlayedThisTurn) return err("bang_already_used");
+    const unlimitedBang = player.equipment.weapon?.name === "volcanic";
+    if (state.bangPlayedThisTurn && !unlimitedBang) return err("bang_already_used");
     if (!targetId || targetId === playerId) return err("invalid_target");
     const target = state.players[targetId];
     if (!target || !target.alive) return err("invalid_target");
+    if (!canShoot(state, playerId, targetId)) return err("out_of_range");
 
     player.hand.splice(cardIndex, 1);
     state.discard.push(card);
-    state.bangPlayedThisTurn = true;
+    if (!unlimitedBang) state.bangPlayedThisTurn = true;
+
+    if (target.equipment.barrel) {
+      const [check] = drawCards(state, 1);
+      if (check) {
+        state.discard.push(check);
+        state.log.push(`${target.nickname}의 술통 체크: ${cardCheckLabel(check)}`);
+        if (check.suit === "hearts") {
+          state.log.push(`${target.nickname}가 술통으로 공격을 막았습니다.`);
+          return ok();
+        }
+      }
+    }
+
     state.pendingBang = {
       attackerId: playerId,
       targetId,
@@ -79,6 +66,43 @@ export function playCard(
     state.discard.push(card);
     player.hp = Math.min(player.maxHp, player.hp + 1);
     state.log.push(`${player.nickname}가 맥주를 마셔 체력을 회복했습니다. (${player.hp}/${player.maxHp})`);
+    return ok();
+  }
+
+  if (WEAPON_NAMES.has(card.name)) {
+    player.hand.splice(cardIndex, 1);
+    if (player.equipment.weapon) state.discard.push(player.equipment.weapon);
+    player.equipment.weapon = card;
+    state.log.push(`${player.nickname}가 ${CARD_LABEL[card.name]}을(를) 장착했습니다.`);
+    return ok();
+  }
+
+  if (card.name === "barrel" || card.name === "mustang" || card.name === "scope") {
+    if (player.equipment[card.name]) return err("already_equipped");
+    player.hand.splice(cardIndex, 1);
+    player.equipment[card.name] = card;
+    state.log.push(`${player.nickname}가 ${CARD_LABEL[card.name]}을(를) 장착했습니다.`);
+    return ok();
+  }
+
+  if (card.name === "dynamite") {
+    if (player.equipment.dynamite) return err("already_equipped");
+    player.hand.splice(cardIndex, 1);
+    player.equipment.dynamite = card;
+    state.log.push(`${player.nickname}가 다이너마이트를 자신에게 설치했습니다.`);
+    return ok();
+  }
+
+  if (card.name === "jail") {
+    if (!targetId || targetId === playerId) return err("invalid_target");
+    const target = state.players[targetId];
+    if (!target || !target.alive) return err("invalid_target");
+    if (target.role === "sheriff") return err("cannot_jail_sheriff");
+    if (target.equipment.jail) return err("already_equipped");
+
+    player.hand.splice(cardIndex, 1);
+    target.equipment.jail = card;
+    state.log.push(`${player.nickname}가 ${target.nickname}을(를) 감옥에 가뒀습니다.`);
     return ok();
   }
 
