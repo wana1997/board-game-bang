@@ -406,6 +406,11 @@
   border-top: 4px solid var(--felt);
 }
 
+.card_brown {
+  background: linear-gradient(160deg, #f2e0c4, #dbb97e);
+  border-top: 4px solid var(--wood);
+}
+
 .cardSelected {
   transform: translateY(-10px);
   outline: 3px solid var(--crimson-bright);
@@ -507,4 +512,78 @@
   content: "» ";
   color: var(--gold);
   font-weight: 700;
+}
+
+/* ---- mobile ---- */
+
+@media (max-width: 480px) {
+  .page {
+    padding: 12px 8px 24px;
+  }
+
+  .main {
+    gap: 12px;
+  }
+
+  .turnBanner {
+    padding: 10px 12px;
+  }
+
+  .turnBannerLabel {
+    font-size: 16px;
+  }
+
+  .seats {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .seat {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .bangCard {
+    padding: 14px;
+  }
+
+  .bangCardTitle {
+    font-size: 16px;
+    text-align: center;
+  }
+
+  .selfPanel {
+    padding: 12px;
+  }
+
+  .hand {
+    gap: 8px;
+  }
+
+  .card {
+    width: 72px;
+    height: 108px;
+  }
+
+  .cardIcon {
+    font-size: 24px;
+  }
+
+  .cardLabel {
+    font-size: 11px;
+  }
+
+  .actionBar {
+    flex-direction: column;
+  }
+
+  .actionBar .woodButton {
+    width: 100%;
+  }
 }

@@ -6,10 +6,16 @@ import type { GameActionResponse, GameView } from "./types";
 
 type GameContextValue = {
   game: GameView | null;
-  playCard: (roomId: string, cardId: string, targetId?: string) => Promise<GameActionResponse>;
-  respondBang: (roomId: string, play: boolean) => Promise<GameActionResponse>;
+  playCard: (
+    roomId: string,
+    cardId: string,
+    targetId?: string,
+    option?: string
+  ) => Promise<GameActionResponse>;
+  respond: (roomId: string, play: boolean) => Promise<GameActionResponse>;
   discardCards: (roomId: string, cardIds: string[]) => Promise<GameActionResponse>;
   endTurn: (roomId: string) => Promise<GameActionResponse>;
+  pickGeneralStore: (roomId: string, cardId: string) => Promise<GameActionResponse>;
 };
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -30,17 +36,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [socket]);
 
   const playCard = useCallback(
-    (roomId: string, cardId: string, targetId?: string) =>
+    (roomId: string, cardId: string, targetId?: string, option?: string) =>
       new Promise<GameActionResponse>((resolve) => {
-        socket.emit("game:play_card", { roomId, cardId, targetId }, resolve);
+        socket.emit("game:play_card", { roomId, cardId, targetId, option }, resolve);
       }),
     [socket]
   );
 
-  const respondBang = useCallback(
+  const respond = useCallback(
     (roomId: string, play: boolean) =>
       new Promise<GameActionResponse>((resolve) => {
-        socket.emit("game:respond_bang", { roomId, play }, resolve);
+        socket.emit("game:respond", { roomId, play }, resolve);
       }),
     [socket]
   );
@@ -61,8 +67,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [socket]
   );
 
+  const pickGeneralStore = useCallback(
+    (roomId: string, cardId: string) =>
+      new Promise<GameActionResponse>((resolve) => {
+        socket.emit("game:pick_general_store", { roomId, cardId }, resolve);
+      }),
+    [socket]
+  );
+
   return (
-    <GameContext.Provider value={{ game, playCard, respondBang, discardCards, endTurn }}>
+    <GameContext.Provider
+      value={{ game, playCard, respond, discardCards, endTurn, pickGeneralStore }}
+    >
       {children}
     </GameContext.Provider>
   );

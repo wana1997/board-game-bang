@@ -53,7 +53,7 @@ export function createGame(room: Room): GameState {
     deck,
     discard: [],
     players,
-    pendingBang: null,
+    pending: null,
     winner: null,
     log: [],
   };
@@ -104,6 +104,18 @@ export function checkWinner(state: GameState): Team | null {
   return null;
 }
 
+export function aliveOthers(state: GameState, excludeId: string): string[] {
+  return state.order.filter((id) => id !== excludeId && state.players[id].alive);
+}
+
+/** 생존자만 좌석 순서대로, startId부터 시작해서 한 바퀴 (startId 포함). */
+export function aliveOrderFrom(state: GameState, startId: string): string[] {
+  const alive = state.order.filter((id) => state.players[id].alive);
+  const idx = alive.indexOf(startId);
+  if (idx === -1) return alive;
+  return [...alive.slice(idx), ...alive.slice(0, idx)];
+}
+
 export function nextAlivePlayerId(state: GameState, fromId: string): string | null {
   const n = state.order.length;
   const fromIdx = state.order.indexOf(fromId);
@@ -151,6 +163,14 @@ export function killPlayer(state: GameState, victim: PlayerState, killerId: stri
   if (winner) {
     state.winner = winner;
     state.log.push(`게임 종료! 승리 진영: ${TEAM_LABEL[winner]}`);
+  }
+}
+
+/** 체력 감소 + 필요 시 사망 처리. 로그 메시지는 호출부에서 상황에 맞게 남긴다. */
+export function applyDamage(state: GameState, victim: PlayerState, amount: number, sourceId: string | null) {
+  victim.hp -= amount;
+  if (victim.hp <= 0) {
+    killPlayer(state, victim, sourceId);
   }
 }
 

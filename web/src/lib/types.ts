@@ -35,6 +35,15 @@ export type CardName =
   | "bang"
   | "missed"
   | "beer"
+  | "indians"
+  | "gatling"
+  | "duel"
+  | "panic"
+  | "cat_balou"
+  | "stagecoach"
+  | "general_store"
+  | "saloon"
+  | "wells_fargo"
   | "schofield"
   | "volcanic"
   | "remington"
@@ -58,10 +67,38 @@ export type Team = "sheriff" | "outlaw" | "renegade";
 export type TurnPhase = "play" | "discard";
 
 export type PendingBang = {
+  kind: "bang";
   attackerId: string;
   targetId: string;
   respondBy: number;
 };
+
+export type PendingDuel = {
+  kind: "duel";
+  casterId: string;
+  targetId: string;
+  currentResponderId: string;
+  respondBy: number;
+};
+
+export type PendingBroadcast = {
+  kind: "indians" | "gatling";
+  casterId: string;
+  requiredCard: "bang" | "missed";
+  targets: string[];
+  respondBy: number;
+};
+
+export type PendingGeneralStore = {
+  kind: "general_store";
+  cards: Card[];
+  pickOrder: string[];
+  respondBy: number;
+};
+
+export type PendingResponse = PendingBang | PendingDuel | PendingBroadcast | PendingGeneralStore;
+
+export type EquipmentSlot = "weapon" | "scope" | "mustang" | "barrel" | "jail" | "dynamite";
 
 export type PublicEquipmentView = {
   weapon: CardName | null;
@@ -93,7 +130,7 @@ export type GameView = {
   deckCount: number;
   players: PublicPlayerView[];
   self: { id: string; role: Role; hand: Card[] };
-  pendingBang: PendingBang | null;
+  pending: PendingResponse | null;
   winner: Team | null;
   log: string[];
 };
@@ -112,7 +149,7 @@ export type GameActionError =
   | "already_equipped"
   | "cannot_jail_sheriff"
   | "cannot_play_outside_response"
-  | "no_pending_bang"
+  | "no_pending_response"
   | "not_your_response"
   | "no_missed_card"
   | "wrong_discard_count"
@@ -140,10 +177,10 @@ export interface ClientToServerEvents {
   ) => void;
   "room:leave": () => void;
   "game:play_card": (
-    payload: { roomId: string; cardId: string; targetId?: string },
+    payload: { roomId: string; cardId: string; targetId?: string; option?: string },
     ack: (res: GameActionResponse) => void
   ) => void;
-  "game:respond_bang": (
+  "game:respond": (
     payload: { roomId: string; play: boolean },
     ack: (res: GameActionResponse) => void
   ) => void;
@@ -153,6 +190,10 @@ export interface ClientToServerEvents {
   ) => void;
   "game:end_turn": (
     payload: { roomId: string },
+    ack: (res: GameActionResponse) => void
+  ) => void;
+  "game:pick_general_store": (
+    payload: { roomId: string; cardId: string },
     ack: (res: GameActionResponse) => void
   ) => void;
 }
@@ -182,7 +223,7 @@ export const GAME_ERROR_MESSAGES: Record<GameActionError, string> = {
   already_equipped: "이미 장착되어 있어 낼 수 없습니다.",
   cannot_jail_sheriff: "보안관에게는 감옥을 사용할 수 없습니다.",
   cannot_play_outside_response: "지금은 낼 수 없는 카드입니다.",
-  no_pending_bang: "응답할 뱅!이 없습니다.",
+  no_pending_response: "응답할 대상이 없습니다.",
   not_your_response: "내가 응답할 차례가 아닙니다.",
   no_missed_card: "빗나감! 카드가 없습니다.",
   wrong_discard_count: "버려야 할 카드 수가 맞지 않습니다.",
@@ -206,6 +247,15 @@ export const CARD_LABEL: Record<CardName, string> = {
   bang: "뱅!",
   missed: "빗나감!",
   beer: "맥주",
+  indians: "인디언!",
+  gatling: "기관총",
+  duel: "결투",
+  panic: "강탈",
+  cat_balou: "캣 벌루",
+  stagecoach: "스테이지코치",
+  general_store: "제너럴 스토어",
+  saloon: "살룬",
+  wells_fargo: "웰스 파고",
   schofield: "스콜필드",
   volcanic: "볼칸",
   remington: "레밍턴",
@@ -222,6 +272,15 @@ export const CARD_ICON: Record<CardName, string> = {
   bang: "🔫",
   missed: "🛡️",
   beer: "🍺",
+  indians: "🏹",
+  gatling: "⚙️",
+  duel: "⚔️",
+  panic: "😱",
+  cat_balou: "🐈",
+  stagecoach: "🚃",
+  general_store: "🏪",
+  saloon: "🍻",
+  wells_fargo: "💰",
   schofield: "🔫",
   volcanic: "🔫",
   remington: "🔫",
@@ -254,6 +313,16 @@ export function weaponRangeOf(weapon: CardName | null): number {
   if (!weapon) return 1;
   return WEAPON_RANGE[weapon] ?? 1;
 }
+
+/** 파란(장착형) 카드 전체 — 카드 색상 톤 분기에 사용. */
+export const BLUE_CARDS = new Set<CardName>([
+  ...WEAPON_CARDS,
+  "scope",
+  "mustang",
+  "barrel",
+  "jail",
+  "dynamite",
+]);
 
 export const SUIT_SYMBOL: Record<Suit, string> = {
   spades: "♠",

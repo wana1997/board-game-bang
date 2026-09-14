@@ -1,4 +1,4 @@
-import type { Card, CardName, Equipment, GameState, PendingBang, Role, TurnPhase, Team } from "./types";
+import type { Card, CardName, Equipment, GameState, PendingResponse, Role, TurnPhase, Team } from "./types";
 
 export type PublicEquipmentView = {
   weapon: CardName | null;
@@ -30,7 +30,7 @@ export type GameView = {
   deckCount: number;
   players: PublicPlayerView[];
   self: { id: string; role: Role; hand: Card[] };
-  pendingBang: PendingBang | null;
+  pending: PendingResponse | null;
   winner: Team | null;
   log: string[];
 };
@@ -75,7 +75,7 @@ export function buildGameView(state: GameState, viewerId: string): GameView {
     deckCount: state.deck.length,
     players,
     self: { id: self.id, role: self.role, hand: self.hand },
-    pendingBang: state.pendingBang,
+    pending: state.pending,
     winner: state.winner,
     log: state.log.slice(-30),
   };
