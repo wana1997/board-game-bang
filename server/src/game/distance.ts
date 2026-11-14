@@ -1,3 +1,4 @@
+import { characterHas } from "./characters";
 import type { CardName, GameState, PlayerState } from "./types";
 
 export function aliveOrder(state: GameState): string[] {
@@ -48,6 +49,11 @@ export function effectiveDistance(state: GameState, fromId: string, toId: string
   return Math.max(1, base - scopeBonus + mustangBonus);
 }
 
+/** 뱅! 사거리: 무기 사거리 + 캐릭터 보너스(매기 헤일 +1). */
+export function bangRange(player: PlayerState): number {
+  return weaponRange(player) + (characterHas(player, "maggie_hale") ? 1 : 0);
+}
+
 export function canShoot(state: GameState, fromId: string, toId: string): boolean {
-  return effectiveDistance(state, fromId, toId) <= weaponRange(state.players[fromId]);
+  return effectiveDistance(state, fromId, toId) <= bangRange(state.players[fromId]);
 }

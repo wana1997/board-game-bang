@@ -1,3 +1,6 @@
+import { CHARACTERS, type CharacterDef } from "./characters";
+import { bangRange } from "./distance";
+import { maxBangsPerTurn } from "./actions";
 import type { Card, CardName, Equipment, GameState, PendingResponse, Role, TurnPhase, Team } from "./types";
 
 export type PublicEquipmentView = {
@@ -17,6 +20,7 @@ export type PublicPlayerView = {
   alive: boolean;
   handCount: number;
   role: Role | null; // null = 아직 공개되지 않은 역할
+  character: CharacterDef; // 캐릭터는 항상 공개
   equipment: PublicEquipmentView;
 };
 
@@ -25,11 +29,20 @@ export type GameView = {
   order: string[];
   currentPlayerId: string;
   turnPhase: TurnPhase;
-  bangPlayedThisTurn: boolean;
+  bangsPlayedThisTurn: number;
+  skillUsedThisTurn: boolean;
   requiredDiscardCount: number;
   deckCount: number;
   players: PublicPlayerView[];
-  self: { id: string; role: Role; hand: Card[] };
+  self: {
+    id: string;
+    role: Role;
+    hand: Card[];
+    /** 캐릭터 보너스 포함 뱅! 사거리 */
+    bangRange: number;
+    /** 이번 턴에 더 쓸 수 있는 뱅! 수 (무제한이면 null) */
+    bangsLeft: number | null;
+  };
   pending: PendingResponse | null;
   winner: Team | null;
   log: string[];
@@ -61,6 +74,7 @@ export function buildGameView(state: GameState, viewerId: string): GameView {
       alive: p.alive,
       handCount: p.hand.length,
       role: roleVisible ? p.role : null,
+      character: CHARACTERS[p.character],
       equipment: publicEquipment(p.equipment),
     };
   });
@@ -70,11 +84,18 @@ export function buildGameView(state: GameState, viewerId: string): GameView {
     order: state.order,
     currentPlayerId: state.order[state.currentPlayerIndex],
     turnPhase: state.turnPhase,
-    bangPlayedThisTurn: state.bangPlayedThisTurn,
+    bangsPlayedThisTurn: state.bangsPlayedThisTurn,
+    skillUsedThisTurn: state.skillUsedThisTurn,
     requiredDiscardCount: state.requiredDiscardCount,
     deckCount: state.deck.length,
     players,
-    self: { id: self.id, role: self.role, hand: self.hand },
+    self: {
+      id: self.id,
+      role: self.role,
+      hand: self.hand,
+      bangRange: bangRange(self),
+      bangsLeft: Number.isFinite(maxBangsPerTurn(self)) ? Math.max(0, maxBangsPerTurn(self) - state.bangsPlayedThisTurn) : null,
+    },
     pending: state.pending,
     winner: state.winner,
     log: state.log.slice(-30),

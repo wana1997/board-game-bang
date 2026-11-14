@@ -1,3 +1,5 @@
+import type { CharacterId } from "./characters";
+
 export type Suit = "spades" | "hearts" | "diamonds" | "clubs";
 
 export type CardName =
@@ -84,6 +86,7 @@ export type PlayerState = {
   id: string;
   nickname: string;
   role: Role;
+  character: CharacterId;
   hp: number;
   maxHp: number;
   hand: Card[];
@@ -96,7 +99,8 @@ export type GameState = {
   order: string[];
   currentPlayerIndex: number;
   turnPhase: TurnPhase;
-  bangPlayedThisTurn: boolean;
+  bangsPlayedThisTurn: number;
+  skillUsedThisTurn: boolean;
   requiredDiscardCount: number;
   deck: Card[];
   discard: Card[];

@@ -1,6 +1,18 @@
 import { config } from "../config";
 import { canShoot, effectiveDistance, WEAPON_NAMES } from "./distance";
-import { advanceTurn, aliveOrderFrom, aliveOthers, applyDamage, currentPlayer, drawCards } from "./state";
+import {
+  advanceTurn,
+  aliveOrderFrom,
+  aliveOthers,
+  applyDamage,
+  beerHasEffect,
+  beerHealAmount,
+  currentPlayer,
+  drawCards,
+  killPlayer,
+  settleTurn,
+} from "./state";
+import { characterHas } from "./characters";
 import {
   cardCheckLabel,
   CARD_LABEL,
@@ -59,8 +71,7 @@ export function playCard(
   const card = player.hand[cardIndex];
 
   if (card.name === "bang") {
-    const unlimitedBang = player.equipment.weapon?.name === "volcanic";
-    if (state.bangPlayedThisTurn && !unlimitedBang) return err("bang_already_used");
+    if (state.bangsPlayedThisTurn >= maxBangsPerTurn(player)) return err("bang_already_used");
     if (!targetId || targetId === playerId) return err("invalid_target");
     const target = state.players[targetId];
     if (!target || !target.alive) return err("invalid_target");
@@ -68,7 +79,7 @@ export function playCard(
 
     player.hand.splice(cardIndex, 1);
     state.discard.push(card);
-    if (!unlimitedBang) state.bangPlayedThisTurn = true;
+    state.bangsPlayedThisTurn += 1;
 
     if (checkBarrel(state, target)) return ok();
 
@@ -83,9 +94,10 @@ export function playCard(
   }
 
   if (card.name === "beer") {
+    if (!beerHasEffect(state)) return err("beer_no_effect");
     player.hand.splice(cardIndex, 1);
     state.discard.push(card);
-    player.hp = Math.min(player.maxHp, player.hp + 1);
+    player.hp = Math.min(player.maxHp, player.hp + beerHealAmount(player));
     state.log.push(`${player.nickname}가 맥주를 마셔 체력을 회복했습니다. (${player.hp}/${player.maxHp})`);
     return ok();
   }
@@ -239,6 +251,21 @@ export function playCard(
   return err("cannot_play_outside_response");
 }
 
+/** 턴당 뱅! 사용 가능 횟수: 볼칸이면 무제한, 카스 몰리나는 무기 미장착 시 2회. */
+export function maxBangsPerTurn(player: PlayerState): number {
+  if (player.equipment.weapon?.name === "volcanic") return Infinity;
+  if (characterHas(player, "cass_molina") && !player.equipment.weapon) return 2;
+  return 1;
+}
+
+/** 뱅!/기관총 공격을 빗나감!이나 술통으로 막았을 때의 캐릭터 훅 (리버 존: 1장 드로우). */
+function onDefended(state: GameState, player: PlayerState) {
+  if (characterHas(player, "river_john")) {
+    player.hand.push(...drawCards(state, 1));
+    state.log.push(`${player.nickname}(리버 존)가 방어에 성공해 카드 1장을 뽑았습니다.`);
+  }
+}
+
 /** 술통 자동 체크. 막았으면 true(로그도 남김). */
 function checkBarrel(state: GameState, target: PlayerState): boolean {
   if (!target.equipment.barrel) return false;
@@ -248,12 +275,20 @@ function checkBarrel(state: GameState, target: PlayerState): boolean {
   state.log.push(`${target.nickname}의 술통 체크: ${cardCheckLabel(check)}`);
   if (check.suit === "hearts") {
     state.log.push(`${target.nickname}가 술통으로 공격을 막았습니다.`);
+    onDefended(state, target);
     return true;
   }
   return false;
 }
 
+/** 응답 처리 후 턴 주인이 쓰러졌으면 턴을 넘긴다. */
 export function respondPending(state: GameState, playerId: string, play: boolean): ActionResult {
+  const result = respondPendingInner(state, playerId, play);
+  if (result.ok) settleTurn(state);
+  return result;
+}
+
+function respondPendingInner(state: GameState, playerId: string, play: boolean): ActionResult {
   if (state.winner) return err("game_over");
   const pending = state.pending;
   if (!pending) return err("no_pending_response");
@@ -268,6 +303,7 @@ export function respondPending(state: GameState, playerId: string, play: boolean
       if (!card) return err("no_missed_card");
       state.discard.push(card);
       state.log.push(`${target.nickname}가 빗나감!으로 ${attacker.nickname}의 공격을 막았습니다.`);
+      onDefended(state, target);
     } else {
       state.log.push(`${target.nickname}가 뱅!을 맞았습니다.`);
       applyDamage(state, target, 1, pending.attackerId);
@@ -331,6 +367,7 @@ function resolveBroadcastResponse(
     } else {
       state.discard.push(card);
       state.log.push(`${player.nickname}가 ${CARD_LABEL[pending.requiredCard]}(으)로 버텼습니다.`);
+      if (pending.kind === "gatling") onDefended(state, player);
     }
   } else {
     state.log.push(`${player.nickname}가 체력을 잃습니다.`);
@@ -360,6 +397,7 @@ export function pickGeneralStore(state: GameState, playerId: string, cardId: str
   pending.pickOrder.shift();
   if (pending.pickOrder.length === 0) {
     state.pending = null;
+    settleTurn(state);
   } else {
     pending.respondBy = Date.now() + config.responseTimeoutMs;
   }
@@ -399,7 +437,8 @@ export function endTurn(state: GameState, playerId: string): ActionResult {
   if (state.turnPhase !== "play") return err("wrong_phase");
 
   const player = currentPlayer(state);
-  const overflow = player.hand.length - player.hp;
+  const handLimit = player.hp + (characterHas(player, "tom_reynolds") ? 2 : 0);
+  const overflow = player.hand.length - handLimit;
   if (overflow > 0) {
     state.turnPhase = "discard";
     state.requiredDiscardCount = overflow;
@@ -408,5 +447,66 @@ export function endTurn(state: GameState, playerId: string): ActionResult {
   }
 
   advanceTurn(state);
+  return ok();
+}
+
+/** 액티브 캐릭터 스킬. 현재는 엘리아스 그레이(손패 1장 버리고 1장 드로우, 턴당 1회)만 존재. */
+export function useSkill(state: GameState, playerId: string, cardIds: string[]): ActionResult {
+  if (state.winner) return err("game_over");
+  if (state.pending) return err("awaiting_response");
+  const player = state.players[playerId];
+  if (!player || !player.alive) return err("not_alive");
+  if (currentPlayer(state).id !== playerId) return err("not_your_turn");
+  if (state.turnPhase !== "play") return err("wrong_phase");
+
+  if (characterHas(player, "elias_grey")) {
+    if (state.skillUsedThisTurn) return err("skill_already_used");
+    if (cardIds.length !== 1) return err("wrong_discard_count");
+    const idx = player.hand.findIndex((c) => c.id === cardIds[0]);
+    if (idx === -1) return err("card_not_found");
+
+    const [discarded] = player.hand.splice(idx, 1);
+    state.discard.push(discarded);
+    player.hand.push(...drawCards(state, 1));
+    state.skillUsedThisTurn = true;
+    state.log.push(`${player.nickname}(엘리아스 그레이)가 카드 1장을 버리고 새로 뽑았습니다.`);
+    return ok();
+  }
+
+  return err("no_active_skill");
+}
+
+/**
+ * 게임 도중 나간 플레이어를 기권(탈락) 처리. 처치 보상/페널티는 없다.
+ * 이 플레이어가 응답해야 하던 대기 상태는 먼저 정리한다.
+ */
+export function forfeit(state: GameState, playerId: string): ActionResult {
+  const player = state.players[playerId];
+  if (state.winner || !player || !player.alive) return ok();
+
+  const pending = state.pending;
+  if (pending) {
+    if (pending.kind === "bang" && (pending.targetId === playerId || pending.attackerId === playerId)) {
+      state.pending = null;
+    } else if (pending.kind === "duel" && (pending.casterId === playerId || pending.targetId === playerId)) {
+      state.pending = null;
+    } else if (pending.kind === "indians" || pending.kind === "gatling") {
+      pending.targets = pending.targets.filter((id) => id !== playerId);
+      if (pending.targets.length === 0) state.pending = null;
+    } else if (pending.kind === "general_store") {
+      const wasPicking = pending.pickOrder[0] === playerId;
+      pending.pickOrder = pending.pickOrder.filter((id) => id !== playerId);
+      if (pending.pickOrder.length === 0) {
+        state.discard.push(...pending.cards);
+        state.pending = null;
+      } else if (wasPicking) {
+        pending.respondBy = Date.now() + config.responseTimeoutMs;
+      }
+    }
+  }
+
+  state.log.push(`${player.nickname}가 게임을 떠났습니다.`);
+  killPlayer(state, player, null);
+  settleTurn(state);
   return ok();
 }

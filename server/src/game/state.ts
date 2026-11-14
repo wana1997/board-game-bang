@@ -11,30 +11,27 @@ import {
 } from "./types";
 import { buildDeck, shuffle } from "./deck";
 import { assignRoles, buildTurnOrder } from "./roles";
+import { assignCharacters, CHARACTERS, characterHas } from "./characters";
 import type { Room } from "../rooms";
-
-// 캐릭터 시스템(Phase 5) 이전까지 쓰는 임시 기본 체력값. 보안관만 +1.
-const MAX_HP: Record<Role, number> = {
-  sheriff: 5,
-  deputy: 4,
-  outlaw: 4,
-  renegade: 4,
-};
 
 export function createGame(room: Room): GameState {
   const playerIds = room.players.map((p) => p.id);
   const roles = assignRoles(playerIds);
   const order = buildTurnOrder(playerIds, roles);
+  const characters = assignCharacters(playerIds);
   const deck = shuffle(buildDeck());
 
   const players: Record<string, PlayerState> = {};
   for (const p of room.players) {
     const role = roles[p.id];
-    const maxHp = MAX_HP[role];
+    const character = characters[p.id];
+    // 캐릭터 기본 체력 + 보안관 보너스 1
+    const maxHp = CHARACTERS[character].maxHp + (role === "sheriff" ? 1 : 0);
     players[p.id] = {
       id: p.id,
       nickname: p.nickname,
       role,
+      character,
       hp: maxHp,
       maxHp,
       hand: deck.splice(0, maxHp),
@@ -48,7 +45,8 @@ export function createGame(room: Room): GameState {
     order,
     currentPlayerIndex: 0,
     turnPhase: "play",
-    bangPlayedThisTurn: false,
+    bangsPlayedThisTurn: 0,
+    skillUsedThisTurn: false,
     requiredDiscardCount: 0,
     deck,
     discard: [],
@@ -127,6 +125,8 @@ export function nextAlivePlayerId(state: GameState, fromId: string): string | nu
   return null;
 }
 
+const EQUIPMENT_KEYS = ["weapon", "scope", "mustang", "barrel", "jail", "dynamite"] as const;
+
 /** 사망 처리: 손패/장착 카드 버림, 처치 보상/페널티, 승리 판정까지 한 번에 처리. */
 export function killPlayer(state: GameState, victim: PlayerState, killerId: string | null) {
   victim.alive = false;
@@ -134,7 +134,7 @@ export function killPlayer(state: GameState, victim: PlayerState, killerId: stri
   victim.hand = [];
 
   const eq = victim.equipment;
-  for (const key of ["weapon", "scope", "mustang", "barrel", "jail", "dynamite"] as const) {
+  for (const key of EQUIPMENT_KEYS) {
     const card = eq[key];
     if (card) {
       state.discard.push(card);
@@ -154,8 +154,23 @@ export function killPlayer(state: GameState, victim: PlayerState, killerId: stri
       if (killer.role === "sheriff" && victim.role === "deputy") {
         state.discard.push(...killer.hand);
         killer.hand = [];
-        state.log.push(`${killer.nickname}가 부관을 죽여 손패를 모두 버렸습니다.`);
+        for (const key of EQUIPMENT_KEYS) {
+          const card = killer.equipment[key];
+          if (card) {
+            state.discard.push(card);
+            killer.equipment[key] = null;
+          }
+        }
+        state.log.push(`${killer.nickname}가 부관을 죽여 손패와 장착 카드를 모두 버렸습니다.`);
       }
+    }
+  }
+
+  for (const id of state.order) {
+    const p = state.players[id];
+    if (p.alive && p.id !== victim.id && characterHas(p, "sadie_crow")) {
+      p.hand.push(...drawCards(state, 2));
+      state.log.push(`${p.nickname}(새디 크로우)가 장의 수당으로 카드 2장을 뽑았습니다.`);
     }
   }
 
@@ -166,12 +181,50 @@ export function killPlayer(state: GameState, victim: PlayerState, killerId: stri
   }
 }
 
-/** 체력 감소 + 필요 시 사망 처리. 로그 메시지는 호출부에서 상황에 맞게 남긴다. */
+export function aliveCount(state: GameState): number {
+  return state.order.filter((id) => state.players[id].alive).length;
+}
+
+/** 맥주 한 잔의 회복량 (도크 해밀턴은 2). */
+export function beerHealAmount(player: PlayerState): number {
+  return characterHas(player, "doc_hamilton") ? 2 : 1;
+}
+
+/** 맥주는 생존자가 2명 이하일 때 효과가 없다. */
+export function beerHasEffect(state: GameState): boolean {
+  return aliveCount(state) > 2;
+}
+
+/**
+ * 체력 감소 + 필요 시 사망 처리. 로그 메시지는 호출부에서 상황에 맞게 남긴다.
+ * 체력이 0 이하가 되면 손패의 맥주를 자동으로 마셔 버틸 수 있으면 버틴다(마지막 한 모금).
+ */
 export function applyDamage(state: GameState, victim: PlayerState, amount: number, sourceId: string | null) {
   victim.hp -= amount;
-  if (victim.hp <= 0) {
-    killPlayer(state, victim, sourceId);
+  if (victim.hp > 0) return;
+
+  if (beerHasEffect(state)) {
+    const beers = victim.hand.filter((c) => c.name === "beer");
+    const heal = beerHealAmount(victim);
+    if (beers.length * heal >= 1 - victim.hp) {
+      while (victim.hp <= 0) {
+        const beer = beers.shift()!;
+        victim.hand.splice(victim.hand.indexOf(beer), 1);
+        state.discard.push(beer);
+        victim.hp = Math.min(victim.maxHp, victim.hp + heal);
+      }
+      state.log.push(`${victim.nickname}가 쓰러지기 직전 맥주를 마셔 버텼습니다! (${victim.hp}/${victim.maxHp})`);
+      return;
+    }
   }
+
+  killPlayer(state, victim, sourceId);
+}
+
+/** 응답 처리 후 호출: 턴 주인이 자기 턴에 쓰러졌다면 다음 사람에게 턴을 넘긴다. */
+export function settleTurn(state: GameState) {
+  if (state.winner || state.pending) return;
+  if (!currentPlayer(state).alive) advanceTurn(state);
 }
 
 /**
@@ -181,7 +234,8 @@ export function applyDamage(state: GameState, victim: PlayerState, amount: numbe
 function beginTurn(state: GameState) {
   const player = currentPlayer(state);
   state.turnPhase = "play";
-  state.bangPlayedThisTurn = false;
+  state.bangsPlayedThisTurn = 0;
+  state.skillUsedThisTurn = false;
   state.requiredDiscardCount = 0;
 
   if (player.equipment.dynamite) {
@@ -197,10 +251,7 @@ function beginTurn(state: GameState) {
       if (exploded) {
         state.discard.push(dynamiteCard);
         state.log.push(`다이너마이트가 폭발했습니다! ${player.nickname} 체력 3 감소`);
-        player.hp -= 3;
-        if (player.hp <= 0) {
-          killPlayer(state, player, null);
-        }
+        applyDamage(state, player, 3, null);
       } else {
         const nextId = nextAlivePlayerId(state, player.id);
         if (nextId) {
@@ -244,8 +295,9 @@ function beginTurn(state: GameState) {
     }
   }
 
-  player.hand.push(...drawCards(state, 2));
-  state.log.push(`${player.nickname}의 턴입니다. (카드 2장 드로우)`);
+  const drawCount = characterHas(player, "lucy_fairweather") ? 3 : 2;
+  player.hand.push(...drawCards(state, drawCount));
+  state.log.push(`${player.nickname}의 턴입니다. (카드 ${drawCount}장 드로우)`);
 }
 
 export function advanceTurn(state: GameState) {
