@@ -181,3 +181,12 @@
   text-align: center;
   color: var(--muted);
 }
+
+.offlineBadge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--surface);
+}

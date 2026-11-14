@@ -1,7 +1,7 @@
 import type { Server, Socket } from "socket.io";
 import { getRoom } from "./rooms";
 import { createGame } from "./game/state";
-import { discardCards, endTurn, pickGeneralStore, playCard, respondPending } from "./game/actions";
+import { discardCards, endTurn, forfeit, pickGeneralStore, playCard, respondPending, useSkill } from "./game/actions";
 import { buildGameView } from "./game/view";
 import type { GameState } from "./game/types";
 
@@ -14,6 +14,36 @@ export function startGameForRoom(io: Server, roomId: string) {
   const state = createGame(room);
   games.set(roomId, state);
   broadcastGame(io, state);
+}
+
+function playerId(socket: Socket): string {
+  return socket.data.playerId as string;
+}
+
+/** 재접속한 플레이어 한 명에게 현재 게임 화면을 보낸다. */
+export function sendGameTo(io: Server, roomId: string, playerId: string) {
+  const state = games.get(roomId);
+  if (state && state.players[playerId]) {
+    io.to(playerId).emit("game:update", buildGameView(state, playerId));
+  }
+}
+
+/** 게임 도중 나간 플레이어를 기권 처리하고 모두에게 반영. */
+export function forfeitInGame(io: Server, roomId: string, playerId: string) {
+  const state = games.get(roomId);
+  if (!state) return;
+  forfeit(state, playerId);
+  broadcastGame(io, state);
+}
+
+export function isGameOver(roomId: string): boolean {
+  return games.get(roomId)?.winner != null;
+}
+
+/** 게임 상태와 응답 타이머를 정리 (재시작/방 삭제 시). */
+export function endGameForRoom(roomId: string) {
+  clearResponseTimer(roomId);
+  games.delete(roomId);
 }
 
 function broadcastGame(io: Server, state: GameState) {
@@ -80,7 +110,7 @@ export function registerGameHandlers(io: Server, socket: Socket) {
       const targetId = typeof payload?.targetId === "string" ? payload.targetId : undefined;
       const option = typeof payload?.option === "string" ? payload.option : undefined;
 
-      const result = playCard(state, socket.id, cardId, targetId, option);
+      const result = playCard(state, playerId(socket), cardId, targetId, option);
       ack?.(result);
       if (result.ok) broadcastGame(io, state);
     }
@@ -94,7 +124,7 @@ export function registerGameHandlers(io: Server, socket: Socket) {
 
       const cardId = typeof payload?.cardId === "string" ? payload.cardId : "";
 
-      const result = pickGeneralStore(state, socket.id, cardId);
+      const result = pickGeneralStore(state, playerId(socket), cardId);
       ack?.(result);
       if (result.ok) broadcastGame(io, state);
     }
@@ -106,7 +136,7 @@ export function registerGameHandlers(io: Server, socket: Socket) {
       const state = games.get(resolveRoomId(payload));
       if (!state) return ack?.({ ok: false, error: "game_not_found" });
 
-      const result = respondPending(state, socket.id, payload?.play === true);
+      const result = respondPending(state, playerId(socket), payload?.play === true);
       ack?.(result);
       if (result.ok) broadcastGame(io, state);
     }
@@ -122,7 +152,23 @@ export function registerGameHandlers(io: Server, socket: Socket) {
         ? payload.cardIds.filter((c): c is string => typeof c === "string")
         : [];
 
-      const result = discardCards(state, socket.id, cardIds);
+      const result = discardCards(state, playerId(socket), cardIds);
+      ack?.(result);
+      if (result.ok) broadcastGame(io, state);
+    }
+  );
+
+  socket.on(
+    "game:use_skill",
+    (payload: { roomId?: unknown; cardIds?: unknown }, ack?: (res: unknown) => void) => {
+      const state = games.get(resolveRoomId(payload));
+      if (!state) return ack?.({ ok: false, error: "game_not_found" });
+
+      const cardIds = Array.isArray(payload?.cardIds)
+        ? payload.cardIds.filter((c): c is string => typeof c === "string")
+        : [];
+
+      const result = useSkill(state, playerId(socket), cardIds);
       ack?.(result);
       if (result.ok) broadcastGame(io, state);
     }
@@ -132,7 +178,7 @@ export function registerGameHandlers(io: Server, socket: Socket) {
     const state = games.get(resolveRoomId(payload));
     if (!state) return ack?.({ ok: false, error: "game_not_found" });
 
-    const result = endTurn(state, socket.id);
+    const result = endTurn(state, playerId(socket));
     ack?.(result);
     if (result.ok) broadcastGame(io, state);
   });

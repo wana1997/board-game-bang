@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useSocket } from "./SocketProvider";
-import type { GameActionResponse, GameView } from "./types";
+import type { GameActionResponse, GameView, Room } from "./types";
 
 type GameContextValue = {
   game: GameView | null;
@@ -16,6 +16,7 @@ type GameContextValue = {
   discardCards: (roomId: string, cardIds: string[]) => Promise<GameActionResponse>;
   endTurn: (roomId: string) => Promise<GameActionResponse>;
   pickGeneralStore: (roomId: string, cardId: string) => Promise<GameActionResponse>;
+  activateSkill: (roomId: string, cardIds: string[]) => Promise<GameActionResponse>;
 };
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -26,12 +27,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const onUpdate = (view: GameView) => setGame(view);
-    const onDisconnect = () => setGame(null);
+    // 방이 대기실로 돌아가거나(재시작) 세션이 사라지면 지난 게임 화면을 지운다
+    const onRoomUpdate = (room: Room) => {
+      if (room.status === "waiting") setGame(null);
+    };
+    const onSession = ({ roomId }: { roomId: string | null }) => {
+      if (!roomId) setGame(null);
+    };
     socket.on("game:update", onUpdate);
-    socket.on("disconnect", onDisconnect);
+    socket.on("room:update", onRoomUpdate);
+    socket.on("session", onSession);
     return () => {
       socket.off("game:update", onUpdate);
-      socket.off("disconnect", onDisconnect);
+      socket.off("room:update", onRoomUpdate);
+      socket.off("session", onSession);
     };
   }, [socket]);
 
@@ -75,9 +84,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
     [socket]
   );
 
+  const activateSkill = useCallback(
+    (roomId: string, cardIds: string[]) =>
+      new Promise<GameActionResponse>((resolve) => {
+        socket.emit("game:use_skill", { roomId, cardIds }, resolve);
+      }),
+    [socket]
+  );
+
   return (
     <GameContext.Provider
-      value={{ game, playCard, respond, discardCards, endTurn, pickGeneralStore }}
+      value={{ game, playCard, respond, discardCards, endTurn, pickGeneralStore, activateSkill }}
     >
       {children}
     </GameContext.Provider>

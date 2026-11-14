@@ -2,6 +2,7 @@ export type Player = {
   id: string;
   nickname: string;
   isHost: boolean;
+  connected: boolean;
 };
 
 export type RoomStatus = "waiting" | "playing";
@@ -21,7 +22,8 @@ export type RoomError =
   | "already_started"
   | "nickname_taken"
   | "not_host"
-  | "not_full";
+  | "not_full"
+  | "game_in_progress";
 
 export type AckResponse =
   | { ok: true; room: Room }
@@ -109,6 +111,14 @@ export type PublicEquipmentView = {
   dynamite: boolean;
 };
 
+export type CharacterDef = {
+  id: string;
+  name: string;
+  maxHp: number;
+  description: string;
+  active?: boolean;
+};
+
 export type PublicPlayerView = {
   id: string;
   nickname: string;
@@ -117,6 +127,7 @@ export type PublicPlayerView = {
   alive: boolean;
   handCount: number;
   role: Role | null;
+  character: CharacterDef;
   equipment: PublicEquipmentView;
 };
 
@@ -125,11 +136,12 @@ export type GameView = {
   order: string[];
   currentPlayerId: string;
   turnPhase: TurnPhase;
-  bangPlayedThisTurn: boolean;
+  bangsPlayedThisTurn: number;
+  skillUsedThisTurn: boolean;
   requiredDiscardCount: number;
   deckCount: number;
   players: PublicPlayerView[];
-  self: { id: string; role: Role; hand: Card[] };
+  self: { id: string; role: Role; hand: Card[]; bangRange: number; bangsLeft: number | null };
   pending: PendingResponse | null;
   winner: Team | null;
   log: string[];
@@ -153,12 +165,16 @@ export type GameActionError =
   | "not_your_response"
   | "no_missed_card"
   | "wrong_discard_count"
-  | "duplicate_card";
+  | "duplicate_card"
+  | "beer_no_effect"
+  | "skill_already_used"
+  | "no_active_skill";
 
 export type GameActionResponse = { ok: true } | { ok: false; error: GameActionError };
 
 export interface ServerToClientEvents {
   "room:update": (room: Room) => void;
+  session: (payload: { playerId: string; roomId: string | null }) => void;
   "game:update": (game: GameView) => void;
 }
 
@@ -172,6 +188,10 @@ export interface ClientToServerEvents {
     ack: (res: AckResponse) => void
   ) => void;
   "room:start": (
+    payload: { roomId: string },
+    ack: (res: AckResponse) => void
+  ) => void;
+  "room:restart": (
     payload: { roomId: string },
     ack: (res: AckResponse) => void
   ) => void;
@@ -192,6 +212,10 @@ export interface ClientToServerEvents {
     payload: { roomId: string },
     ack: (res: GameActionResponse) => void
   ) => void;
+  "game:use_skill": (
+    payload: { roomId: string; cardIds: string[] },
+    ack: (res: GameActionResponse) => void
+  ) => void;
   "game:pick_general_store": (
     payload: { roomId: string; cardId: string },
     ack: (res: GameActionResponse) => void
@@ -207,6 +231,7 @@ export const ROOM_ERROR_MESSAGES: Record<RoomError, string> = {
   nickname_taken: "이미 사용 중인 닉네임입니다. 다른 닉네임을 입력해주세요.",
   not_host: "방장만 게임을 시작할 수 있습니다.",
   not_full: "정원이 다 차야 게임을 시작할 수 있습니다.",
+  game_in_progress: "게임이 끝난 뒤에 다시 시작할 수 있습니다.",
 };
 
 export const GAME_ERROR_MESSAGES: Record<GameActionError, string> = {
@@ -228,6 +253,9 @@ export const GAME_ERROR_MESSAGES: Record<GameActionError, string> = {
   no_missed_card: "빗나감! 카드가 없습니다.",
   wrong_discard_count: "버려야 할 카드 수가 맞지 않습니다.",
   duplicate_card: "같은 카드를 중복해서 선택했습니다.",
+  beer_no_effect: "2명만 남으면 맥주는 효과가 없습니다.",
+  skill_already_used: "이번 턴에는 이미 스킬을 사용했습니다.",
+  no_active_skill: "사용할 수 있는 스킬이 없습니다.",
 };
 
 export const ROLE_LABEL: Record<Role, string> = {

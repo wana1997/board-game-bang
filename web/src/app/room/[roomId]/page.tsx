@@ -118,6 +118,7 @@ export default function RoomPage() {
               <span className={styles.playerName}>{p.nickname}</span>
               {p.isHost && <span className={styles.hostBadge}>★ 방장</span>}
               {p.id === selfId && <span className={styles.selfBadge}>나</span>}
+              {!p.connected && <span className={styles.offlineBadge}>연결 끊김</span>}
             </li>
           ))}
         </ul>

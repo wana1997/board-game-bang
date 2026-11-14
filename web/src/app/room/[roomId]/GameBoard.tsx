@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRoom } from "@/lib/RoomProvider";
+import { useSocket } from "@/lib/SocketProvider";
 import { useGame } from "@/lib/GameProvider";
 import {
   BLUE_CARDS,
@@ -134,12 +135,16 @@ function equipmentOptions(
 
 export default function GameBoard({ roomId }: { roomId: string }) {
   const router = useRouter();
-  const { leaveRoom } = useRoom();
-  const { game, playCard, respond, discardCards, endTurn, pickGeneralStore } = useGame();
+  const { room, selfId: roomSelfId, leaveRoom, restartRoom } = useRoom();
+  const { connected } = useSocket();
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const { game, playCard, respond, discardCards, endTurn, pickGeneralStore, activateSkill } = useGame();
 
   const [targetingCard, setTargetingCard] = useState<Card | null>(null);
   const [stealTargetId, setStealTargetId] = useState<string | null>(null);
   const [selectedDiscards, setSelectedDiscards] = useState<string[]>([]);
+  const [skillMode, setSkillMode] = useState(false);
+  const [skillCardId, setSkillCardId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -151,10 +156,8 @@ export default function GameBoard({ roomId }: { roomId: string }) {
     () => (myResponse ? (game?.self.hand.some((c) => c.name === myResponse.requiredCard) ?? false) : false),
     [game, myResponse]
   );
-  const myWeaponRange = useMemo(() => {
-    const me = game?.players.find((p) => p.id === selfId);
-    return weaponRangeOf(me?.equipment.weapon ?? null);
-  }, [game, selfId]);
+  const myWeaponRange = game?.self.bangRange ?? 1;
+  const myCharacter = game?.players.find((p) => p.id === selfId)?.character ?? null;
   const myGeneralStorePick =
     game?.pending?.kind === "general_store" && game.pending.pickOrder[0] === selfId ? game.pending : null;
 
@@ -179,6 +182,10 @@ export default function GameBoard({ roomId }: { roomId: string }) {
   }
 
   function handleCardClick(card: Card) {
+    if (skillMode) {
+      setSkillCardId((prev) => (prev === card.id ? null : card.id));
+      return;
+    }
     if (!isMyTurn || game!.turnPhase !== "play" || game!.pending || pending) return;
     if (TARGETED_PLAYABLE.has(card.name) || STEAL_PLAYABLE.has(card.name)) {
       setTargetingCard(card);
@@ -220,6 +227,18 @@ export default function GameBoard({ roomId }: { roomId: string }) {
     );
   }
 
+  async function confirmSkill() {
+    if (!skillCardId) return;
+    await handleAction(activateSkill(roomId, [skillCardId]));
+    setSkillMode(false);
+    setSkillCardId(null);
+  }
+
+  function cancelSkill() {
+    setSkillMode(false);
+    setSkillCardId(null);
+  }
+
   async function confirmDiscard() {
     await handleAction(discardCards(roomId, selectedDiscards));
     setSelectedDiscards([]);
@@ -229,6 +248,20 @@ export default function GameBoard({ roomId }: { roomId: string }) {
     leaveRoom();
     router.push("/");
   }
+
+  async function handleRestart() {
+    setError(null);
+    setPending(true);
+    const result = await restartRoom();
+    setPending(false);
+    if (!result.ok) setError("다시 시작하지 못했습니다. 방장만 다시 시작할 수 있습니다.");
+  }
+
+  const isHost = room?.players.find((p) => p.id === roomSelfId)?.isHost ?? false;
+  const offlineIds = new Set(room?.players.filter((p) => !p.connected).map((p) => p.id) ?? []);
+  const connectionBanner = !connected && (
+    <p className={styles.connectionBanner}>서버와 연결이 끊겼습니다. 다시 연결하는 중...</p>
+  );
 
   if (game.winner) {
     return (
@@ -247,12 +280,21 @@ export default function GameBoard({ roomId }: { roomId: string }) {
                       {ROLE_ICON[p.role]} {ROLE_LABEL[p.role]}
                     </span>
                   )}
+                  <span className={styles.characterTag}>🤠 {p.character.name}</span>
                   <span className={styles.seatStatus}>{p.alive ? "생존" : "탈락"}</span>
                 </div>
               </li>
             ))}
           </ul>
-          <button className={styles.woodButton} onClick={handleLeave}>
+          {error && <p className={styles.error}>{error}</p>}
+          {isHost ? (
+            <button className={styles.woodButton} onClick={handleRestart} disabled={pending}>
+              🔁 같은 멤버로 다시 하기
+            </button>
+          ) : (
+            <p className={styles.waitingLine}>방장이 다시 시작하길 기다리는 중...</p>
+          )}
+          <button className={styles.woodButtonGhost} onClick={handleLeave}>
             홈으로
           </button>
         </main>
@@ -298,6 +340,7 @@ export default function GameBoard({ roomId }: { roomId: string }) {
           </div>
         </div>
 
+        {connectionBanner}
         {waitingText && <p className={styles.waitingLine}>{waitingText}</p>}
 
         <ul className={styles.seats}>
@@ -311,12 +354,16 @@ export default function GameBoard({ roomId }: { roomId: string }) {
                 <span className={styles.seatName}>
                   {p.nickname}
                   {p.id === selfId && <span className={styles.youTag}>나</span>}
+                  {offlineIds.has(p.id) && <span className={styles.offlineTag}>연결 끊김</span>}
                 </span>
                 {p.role && (
                   <span className={styles.roleBadge} data-role={p.role}>
                     {ROLE_ICON[p.role]} {ROLE_LABEL[p.role]}
                   </span>
                 )}
+                <span className={styles.characterTag} title={p.character.description}>
+                  🤠 {p.character.name}
+                </span>
                 <HpPips hp={p.hp} maxHp={p.maxHp} />
                 <span className={styles.handCountTag}>🂠 {p.handCount}</span>
                 <EquipmentBadges equipment={p.equipment} />
@@ -457,6 +504,11 @@ export default function GameBoard({ roomId }: { roomId: string }) {
             <span>
               내 역할: <strong>{ROLE_ICON[game.self.role]} {ROLE_LABEL[game.self.role]}</strong>
             </span>
+            {isMyTurn && game.turnPhase === "play" && (
+              <span className={styles.bangCounter}>
+                🔫 뱅! {game.self.bangsLeft === null ? "무제한" : `${game.self.bangsLeft}회 남음`} · 사거리 {myWeaponRange}
+              </span>
+            )}
             {isDiscardTurn && (
               <span className={styles.discardCounter}>
                 {selectedDiscards.length}/{game.requiredDiscardCount}장 선택됨
@@ -464,9 +516,17 @@ export default function GameBoard({ roomId }: { roomId: string }) {
             )}
           </div>
 
+          {myCharacter && (
+            <p className={styles.characterInfo}>
+              <strong>🤠 {myCharacter.name}</strong> — {myCharacter.description}
+            </p>
+          )}
+
+          {skillMode && <p className={styles.characterInfo}>버릴 카드 1장을 고르세요.</p>}
+
           <div className={styles.hand}>
             {game.self.hand.map((card) => {
-              const selected = selectedDiscards.includes(card.id);
+              const selected = skillMode ? skillCardId === card.id : selectedDiscards.includes(card.id);
               const playable =
                 TARGETED_PLAYABLE.has(card.name) ||
                 STEAL_PLAYABLE.has(card.name) ||
@@ -474,6 +534,7 @@ export default function GameBoard({ roomId }: { roomId: string }) {
                 WEAPON_CARDS.has(card.name);
               const disabled =
                 !isDiscardTurn &&
+                !skillMode &&
                 (!playable || !isMyTurn || game.turnPhase !== "play" || !!game.pending);
               return (
                 <PlayingCard
@@ -497,14 +558,38 @@ export default function GameBoard({ roomId }: { roomId: string }) {
                 선택한 카드 버리기
               </button>
             )}
-            {isMyTurn && game.turnPhase === "play" && !game.pending && (
-              <button
-                className={styles.woodButton}
-                onClick={() => handleAction(endTurn(roomId))}
-                disabled={pending}
-              >
-                턴 종료
-              </button>
+            {skillMode ? (
+              <>
+                <button className={styles.woodButton} disabled={!skillCardId || pending} onClick={confirmSkill}>
+                  🎲 카드 교체
+                </button>
+                <button className={styles.woodButtonGhost} onClick={cancelSkill}>
+                  취소
+                </button>
+              </>
+            ) : (
+              isMyTurn &&
+              game.turnPhase === "play" &&
+              !game.pending && (
+                <>
+                  {myCharacter?.active && (
+                    <button
+                      className={styles.woodButtonGhost}
+                      disabled={game.skillUsedThisTurn || game.self.hand.length === 0 || pending}
+                      onClick={() => setSkillMode(true)}
+                    >
+                      🎲 스킬 사용{game.skillUsedThisTurn ? " (사용함)" : ""}
+                    </button>
+                  )}
+                  <button
+                    className={styles.woodButton}
+                    onClick={() => handleAction(endTurn(roomId))}
+                    disabled={pending}
+                  >
+                    턴 종료
+                  </button>
+                </>
+              )
             )}
           </div>
         </div>
@@ -520,9 +605,21 @@ export default function GameBoard({ roomId }: { roomId: string }) {
           </ul>
         </div>
 
-        <button className={styles.woodButtonGhost} onClick={handleLeave}>
-          나가기
-        </button>
+        {confirmLeave ? (
+          <div className={styles.actionBar}>
+            <span className={styles.leaveWarning}>지금 나가면 기권(탈락) 처리됩니다.</span>
+            <button className={styles.woodButton} onClick={handleLeave}>
+              기권하고 나가기
+            </button>
+            <button className={styles.woodButtonGhost} onClick={() => setConfirmLeave(false)}>
+              계속하기
+            </button>
+          </div>
+        ) : (
+          <button className={styles.woodButtonGhost} onClick={() => setConfirmLeave(true)}>
+            나가기
+          </button>
+        )}
       </main>
     </div>
   );

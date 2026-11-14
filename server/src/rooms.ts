@@ -2,6 +2,8 @@ export type Player = {
   id: string;
   nickname: string;
   isHost: boolean;
+  /** 소켓 연결 여부. 게임 중 연결이 끊겨도 자리는 유지되고, 재접속하면 true로 돌아온다. */
+  connected: boolean;
 };
 
 export type RoomStatus = "waiting" | "playing";
@@ -72,7 +74,7 @@ export function createRoom(
     id: generateRoomId(),
     capacity,
     status: "waiting",
-    players: [{ id: hostId, nickname: hostNickname, isHost: true }],
+    players: [{ id: hostId, nickname: hostNickname, isHost: true, connected: true }],
   };
   rooms.set(room.id, room);
   return room;
@@ -85,10 +87,16 @@ export function joinRoom(
 ): Room | RoomError {
   const room = getRoom(roomId);
   if (!room) return "not_found";
+  // 이미 이 방에 있는 플레이어(새로고침 후 재입장)는 그대로 통과
+  const existing = room.players.find((p) => p.id === playerId);
+  if (existing) {
+    existing.connected = true;
+    return room;
+  }
   if (room.status !== "waiting") return "already_started";
   if (room.players.length >= room.capacity) return "full";
   if (room.players.some((p) => p.nickname === nickname)) return "nickname_taken";
-  room.players.push({ id: playerId, nickname, isHost: false });
+  room.players.push({ id: playerId, nickname, isHost: false, connected: true });
   return room;
 }
 
@@ -122,4 +130,30 @@ export function removePlayer(playerId: string): Room | undefined {
     return room;
   }
   return undefined;
+}
+
+export function findRoomByPlayer(playerId: string): Room | undefined {
+  for (const room of rooms.values()) {
+    if (room.players.some((p) => p.id === playerId)) return room;
+  }
+  return undefined;
+}
+
+export function setConnected(room: Room, playerId: string, connected: boolean) {
+  const player = room.players.find((p) => p.id === playerId);
+  if (player) player.connected = connected;
+}
+
+export function deleteRoom(roomId: string) {
+  rooms.delete(roomId.toUpperCase());
+}
+
+/** 게임 종료 후 같은 멤버로 대기실로 복귀. 방장만 가능. */
+export function restartRoom(roomId: string, requesterId: string): Room | RoomError {
+  const room = getRoom(roomId);
+  if (!room) return "not_found";
+  const host = room.players.find((p) => p.isHost);
+  if (!host || host.id !== requesterId) return "not_host";
+  room.status = "waiting";
+  return room;
 }

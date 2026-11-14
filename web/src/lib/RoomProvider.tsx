@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useSocket } from "./SocketProvider";
+import { getPlayerToken } from "./socket";
 import type { AckResponse, Room } from "./types";
 
 const NICKNAME_STORAGE_KEY = "bang_nickname";
@@ -19,6 +20,7 @@ type RoomContextValue = {
   createRoom: (nickname: string, capacity: number) => Promise<AckResponse>;
   joinRoom: (roomId: string, nickname: string) => Promise<AckResponse>;
   startRoom: () => Promise<AckResponse>;
+  restartRoom: () => Promise<AckResponse>;
   leaveRoom: () => void;
 };
 
@@ -27,23 +29,24 @@ const RoomContext = createContext<RoomContextValue | null>(null);
 export function RoomProvider({ children }: { children: ReactNode }) {
   const { socket } = useSocket();
   const [room, setRoom] = useState<Room | null>(null);
-  const [selfId, setSelfId] = useState<string | null>(socket.id ?? null);
+  // 서버는 탭별 토큰을 플레이어 id로 쓴다
+  const [selfId] = useState<string | null>(() => getPlayerToken() || null);
 
   useEffect(() => {
     const onUpdate = (nextRoom: Room) => {
       setRoom((current) => (current && current.id !== nextRoom.id ? current : nextRoom));
     };
-    const onConnect = () => setSelfId(socket.id ?? null);
-    const onDisconnect = () => setRoom(null);
+    // 연결이 잠깐 끊겨도 방 정보는 유지하고, 재접속 시 서버가 알려주는 세션으로 판단한다
+    const onSession = ({ roomId }: { roomId: string | null }) => {
+      if (!roomId) setRoom(null);
+    };
 
     socket.on("room:update", onUpdate);
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
+    socket.on("session", onSession);
 
     return () => {
       socket.off("room:update", onUpdate);
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
+      socket.off("session", onSession);
     };
   }, [socket]);
 
@@ -87,6 +90,18 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     [socket, room]
   );
 
+  const restartRoom = useCallback(
+    () =>
+      new Promise<AckResponse>((resolve) => {
+        if (!room) return resolve({ ok: false, error: "not_found" });
+        socket.emit("room:restart", { roomId: room.id }, (res) => {
+          if (res.ok) setRoom(res.room);
+          resolve(res);
+        });
+      }),
+    [socket, room]
+  );
+
   const leaveRoom = useCallback(() => {
     socket.emit("room:leave");
     setRoom(null);
@@ -94,7 +109,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
 
   return (
     <RoomContext.Provider
-      value={{ room, selfId, createRoom, joinRoom, startRoom, leaveRoom }}
+      value={{ room, selfId, createRoom, joinRoom, startRoom, restartRoom, leaveRoom }}
     >
       {children}
     </RoomContext.Provider>

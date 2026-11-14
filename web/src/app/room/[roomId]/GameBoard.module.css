@@ -587,3 +587,62 @@
     width: 100%;
   }
 }
+
+/* ---- characters (Phase 5) ---- */
+
+.characterTag {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gold);
+  cursor: help;
+}
+
+.characterInfo {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--surface);
+  margin: 0;
+}
+
+.characterInfo strong {
+  color: var(--gold-bright);
+}
+
+.bangCounter {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--felt-dark);
+  color: var(--surface);
+}
+
+/* ---- connection / leave (Phase 7) ---- */
+
+.connectionBanner {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--crimson);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.offlineTag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--surface);
+}
+
+.leaveWarning {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--crimson);
+  align-self: center;
+}

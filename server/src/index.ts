@@ -7,7 +7,7 @@ import { registerRoomHandlers } from "./socketHandlers";
 import { registerGameHandlers } from "./gameHandlers";
 
 const app = express();
-app.use(cors({ origin: config.clientOrigin }));
+app.use(cors({ origin: config.clientOrigins }));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
@@ -15,7 +15,7 @@ app.get("/health", (_req, res) => {
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: config.clientOrigin },
+  cors: { origin: config.clientOrigins },
 });
 
 io.on("connection", (socket) => {
