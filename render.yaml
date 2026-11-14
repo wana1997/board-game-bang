@@ -1,0 +1,17 @@
+# Render Blueprint: 실시간 게임 서버 (Socket.io)
+# Render 대시보드 > New > Blueprint 에서 이 저장소를 연결하면 아래 서비스가 생성된다.
+services:
+  - type: web
+    name: bang-server
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Vercel에 배포한 프론트엔드 주소 (쉼표로 여러 개 가능)
+      - key: CLIENT_ORIGIN
+        sync: false
